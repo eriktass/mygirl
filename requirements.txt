@@ -1,0 +1,19 @@
+# AI Companion Dependencies
+# For building an AI companion that won't judge your life choices
+
+openai==1.102.0
+speechrecognition==3.10.0
+pydub==0.25.1
+requests==2.31.0
+keyboard==0.13.5
+
+# Audio processing dependencies
+pyaudio==0.2.11  # For microphone access
+simpleaudio==1.0.4  # Alternative audio playback if pydub fails
+
+# Optional but recommended
+python-dotenv==1.0.0  # For environment variable management (API keys)
+colorama==0.4.6  # For colored terminal output because why not
+
+# Development and debugging
+rich==13.7.0  # Pretty terminal output for debugging

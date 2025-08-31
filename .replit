@@ -1,8 +1,9 @@
 entrypoint = "main.py"
-modules = ["python-3.11"]
+modules = ["python-3.11", "python-3.8"]
 
 [nix]
 channel = "stable-25_05"
+packages = ["ffmpeg-full"]
 
 [unitTest]
 language = "python3"
