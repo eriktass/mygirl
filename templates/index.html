@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Companion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#2a5298">
+        <link rel="manifest" href="/static/manifest.json">
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 20px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .status {
+            font-size: 1.2em;
+            opacity: 0.8;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background: rgba(74, 144, 226, 0.3);
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .ai-message {
+            background: rgba(46, 204, 113, 0.3);
+            margin-right: auto;
+        }
+
+        .error-message {
+            background: rgba(231, 76, 60, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+        }
+
+        .text-input {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1em;
+            backdrop-filter: blur(10px);
+        }
+
+        .text-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .text-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .send-button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(45deg, #3742fa, #2f3542);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            opacity: 0.7;
+            font-style: italic;
+            padding: 10px;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .input-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            
+            .send-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI Companion</h1>
+        <div class="status" id="status">Ready to chat</div>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-messages" id="chatMessages">
+            <div class="ai-message">
+               Is there something I can help you with or should I just suck your dick
+            </div>
+        </div>
+
+        <div class="input-container">
+            <button type="button" class="send-button" id="recordButton" onclick="toggleRecording()">🎤 Record</button>
+            <input type="text" class="text-input" id="textInput" placeholder="Type your message here..." maxlength="500">
+            <button class="send-button" id="sendButton" onclick="sendTextMessage()">Send</button>
+        </div>
+
+        <div class="loading" id="loading">Processing...</div>
+    </div>
+
+    <script>
+        // DOM elements
+        const chatMessages = document.getElementById('chatMessages');
+        const textInput = document.getElementById('textInput');
+        const sendButton = document.getElementById('sendButton');
+        const status = document.getElementById('status');
+        const loading = document.getElementById('loading');
+
+        // Send text message
+        async function sendTextMessage() {
+            const message = textInput.value.trim();
+            if (!message) return;
+
+            // Disable input while processing
+            textInput.disabled = true;
+            sendButton.disabled = true;
+            textInput.value = '';
+
+            // Add user message
+            addMessage(message, 'user');
+            updateStatus('Processing...');
+            showLoading(true);
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    // Add AI response
+                    addMessage(result.ai_response, 'ai');
+
+                    // Play audio if available
+                    if (result.audio_response) {
+                        playAudio(result.audio_response);
+                    }
+
+                    updateStatus('Ready to chat');
+                } else {
+                    showError(result.error || 'Chat failed');
+                }
+
+            } catch (error) {
+                console.error('Chat request error:', error);
+                showError('Failed to send message. Check your connection.');
+            }
+
+            // Re-enable input
+            textInput.disabled = false;
+            sendButton.disabled = false;
+            textInput.focus();
+            showLoading(false);
+        }
+
+        // Handle Enter key
+        textInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendTextMessage();
+            }
+        });
+
+        // Add message to chat
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            messageDiv.textContent = text;
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Play audio response
+        function playAudio(audioBase64) {
+            try {
+                const audio = new Audio();
+                audio.src = 'data:audio/mpeg;base64,' + audioBase64;
+                audio.play().catch(error => {
+                    console.log('Audio playback failed:', error);
+                });
+            } catch (error) {
+                console.log('Audio creation error:', error);
+            }
+        }
+
+        // Update status message
+        function updateStatus(message) {
+            status.textContent = message;
+        }
+
+        // Show/hide loading indicator
+        function showLoading(show) {
+            loading.style.display = show ? 'block' : 'none';
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            chatMessages.appendChild(errorDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            updateStatus('Ready to chat');
+
+            // Remove error message after 5 seconds
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+            }, 5000);
+        }
+
+        // Focus on input when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            textInput.focus();
+        });
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        async function toggleRecording() {
+            const recordButton = document.getElementById('recordButton');
+
+            if (!isRecording) {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({                      audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = processRecording;
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordButton.textContent = '⏹️ Stop';
+                    updateStatus('Recording...');
+
+                } catch (error) {
+                    showError('Microphone access denied');
+                }
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.textContent = '🎤 Record';
+            }
+        }
+
+        async function processRecording() {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+
+            showLoading(true);
+            updateStatus('Transcribing...');
+
+            try {
+                const response = await fetch('/voice', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    // Put transcript in text input
+                    textInput.value = result.transcript;
+                    updateStatus('Ready to chat');
+                } else {
+                    showError('Transcription failed: ' + result.error);
+                }
+
+            } catch (error) {
+                showError('Voice processing failed');
+            }
+
+            showLoading(false);
+        }
+        
+    </script>
+</body>
+</html>

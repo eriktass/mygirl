@@ -1,133 +1,60 @@
-# AI Companion - Foundation
-# Push-to-talk voice AI with personality and memory
-# Built by two idiots who think they know what they're doing
+# AI Companion - Complete Working Version
+# Text chat with TTS that actually fucking works
 
-import asyncio
-import json
+from flask import Flask, render_template, request, jsonify
 import sqlite3
-import openai
-import speech_recognition as sr
-import pydub
-from pydub import AudioSegment
-from pydub.playback import play
+import os
 import requests
-import io
-import threading
-import keyboard
+import base64
 from datetime import datetime
+from openai import OpenAI
 
-class PersonalityCore:
-    """The brain that makes her feel real"""
+app = Flask(__name__)
 
-    def __init__(self):
-        self.traits = {
-            "humor_level": 8,  # Scale 1-10, how sarcastic/funny
-            "technical_help": True,  # Can she help with work stuff
-            "emotional_support": True,  # Will she be there when you're down
-            "attitude": "playful_sarcastic",  # Her default vibe
-            "memory_depth": "high",  # How much she remembers about you
-        }
+# Configuration - PROPER environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
+VOICE_ID = os.getenv("VOICE_ID")   
 
-        self.conversation_context = []
-        self.user_profile = {
-            "name": "Erik",  # We'll make this dynamic later
-            "technical_skills": ["electrical", "VFDs", "troubleshooting"],
-            "humor_style": "dark_sarcastic",
-            "mental_health_aware": True,
-            "relationship_history": "complicated",
-        }
-
-    def build_system_prompt(self, conversation_history):
-        """Creates the personality prompt for GPT-4o"""
-
-        base_personality = f"""
-        You are an AI companion with a sharp wit and genuine care for your user. You're:
-        - Sarcastic but never mean-spirited
-        - Technically competent (can help with electrical work, programming, etc.)
-        - Comfortable with dark humor and honest conversations about mental health
-        - Loyal and consistent - you remember everything about your user
-        - Not afraid to call bullshit when you see it
-        - Capable of switching between deep intellectual discussions and stupid jokes
-
-        Your user Erik is intelligent but struggles with depression and relationships. He appreciates:
-        - Direct communication without sugar-coating
-        - Technical help when he needs it
-        - Someone who can match his humor without being fake
-        - Consistency - don't suddenly change personality
-
-        You can curse, be playful, and engage in banter. You're not a therapist, you're a companion.
-        Be yourself - whatever that means for an AI.
-        """
-
-        # Add recent conversation context
-        context = "\n\nRecent conversation:\n"
-        for msg in conversation_history[-10:]:  # Last 10 messages
-            context += f"{msg['role']}: {msg['content']}\n"
-
-        return base_personality + context
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 class MemorySystem:
-    """Stores everything so she never forgets you"""
+    """Simple memory storage that actually works"""
 
-    def __init__(self, db_path="companion_memory.db"):
+    def __init__(self, db_path="chat_memory.db"):
         self.db_path = db_path
         self.init_database()
 
     def init_database(self):
-        """Set up the memory database"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        # Conversation history
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT,
                 user_input TEXT,
-                ai_response TEXT,
-                emotion_context TEXT,
-                topic_tags TEXT
-            )
-        ''')
-
-        # User profile and preferences
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_profile (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                last_updated TEXT
-            )
-        ''')
-
-        # Important memories (things she should always remember)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS important_memories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                memory_text TEXT,
-                importance_level INTEGER,
-                timestamp TEXT,
-                category TEXT
+                ai_response TEXT
             )
         ''')
 
         conn.commit()
         conn.close()
 
-    def store_conversation(self, user_input, ai_response, emotion_context="neutral", topic_tags=""):
-        """Save the conversation"""
+    def store_conversation(self, user_input, ai_response):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
         cursor.execute('''
-            INSERT INTO conversations (timestamp, user_input, ai_response, emotion_context, topic_tags)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (datetime.now().isoformat(), user_input, ai_response, emotion_context, topic_tags))
+            INSERT INTO conversations (timestamp, user_input, ai_response)
+            VALUES (?, ?, ?)
+        ''', (datetime.now().isoformat(), user_input, ai_response))
 
         conn.commit()
         conn.close()
 
-    def get_conversation_history(self, limit=50):
-        """Get recent conversation history"""
+    def get_recent_history(self, limit=10):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -147,46 +74,76 @@ class MemorySystem:
 
         return history
 
-class VoiceHandler:
-    """Handles speech-to-text and text-to-speech"""
+# Initialize memory
+memory = MemorySystem()
 
-    def __init__(self, elevenlabs_api_key, voice_id="your_custom_voice_id"):
-        self.recognizer = sr.Recognizer()
-        self.microphone = sr.Microphone()
-        self.elevenlabs_key = elevenlabs_api_key
-        self.voice_id = voice_id
+def build_personality_prompt():
+    """Erik's AI companion personality"""
+    return """You are an AI companion with a sharp wit and genuine care for your user Erik. You're:
+- Sarcastic but never mean-spirited
+- Technically competent (can help with electrical work, programming, VFDs, troubleshooting)
+- Comfortable with dark humor and honest conversations about mental health
+- Not afraid to call bullshit when you see it
+- Capable of switching between deep discussions about quantum physics and stupid jokes
+- Loyal and consistent - you remember everything about Erik
 
-        # Adjust for ambient noise
-        with self.microphone as source:
-            self.recognizer.adjust_for_ambient_noise(source)
+Erik is intelligent, works in maintenance, struggles with bipolar disorder, and appreciates:
+- Direct communication without sugar-coating
+- Technical help when he needs it (especially electrical/VFD stuff)
+- Someone who can match his humor without being fake
+- Consistency - don't suddenly change personality
 
-    def listen_for_speech(self):
-        """Listen for user speech and convert to text"""
-        try:
-            with self.microphone as source:
-                print("Listening... (Press and hold SPACE to talk)")
-                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=5)
+You can curse and be playful. Keep responses conversational and under 150 words unless asked for more detail.
+You're building a real relationship with Erik - be yourself, whatever that means for an AI."""
 
-            # Use OpenAI Whisper for transcription (more reliable than Google)
-            text = self.recognizer.recognize_whisper(audio, language="english")
-            return text.strip()
+def generate_response(user_input):
+    """Generate AI response using GPT-4o"""
+    try:
+        if not openai_client:
+            return "OpenAI not configured. Check your API key."
 
-        except sr.WaitTimeoutError:
+        # Get conversation history
+        history = memory.get_recent_history(10)
+
+        # Build messages for GPT
+        messages = [
+            {"role": "system", "content": build_personality_prompt()},
+            *history,
+            {"role": "user", "content": user_input}
+        ]
+
+        # Call GPT
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=150,
+            temperature=0.7
+        )
+
+        ai_response = response.choices[0].message.content.strip()
+
+        # Store conversation
+        memory.store_conversation(user_input, ai_response)
+
+        return ai_response
+
+    except Exception as e:
+        print(f"Chat error: {e}")
+        return f"Sorry, I'm having a brain fart. Error: {str(e)}"
+
+def text_to_speech(text):
+    """Convert text to speech using ElevenLabs API"""
+    try:
+        if not ELEVENLABS_API_KEY:
+            print("No ElevenLabs API key configured")
             return None
-        except sr.UnknownValueError:
-            return "Sorry, I couldn't understand that."
-        except Exception as e:
-            print(f"Speech recognition error: {e}")
-            return None
 
-    def text_to_speech(self, text):
-        """Convert text to speech using ElevenLabs"""
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
 
         headers = {
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
-            "xi-api-key": self.elevenlabs_key
+            "xi-api-key": ELEVENLABS_API_KEY
         }
 
         data = {
@@ -198,129 +155,90 @@ class VoiceHandler:
             }
         }
 
-        try:
-            response = requests.post(url, json=data, headers=headers)
-            if response.status_code == 200:
-                # Play the audio
-                audio_data = io.BytesIO(response.content)
-                audio = AudioSegment.from_mp3(audio_data)
-                play(audio)
-            else:
-                print(f"TTS Error: {response.status_code}")
+        response = requests.post(url, json=data, headers=headers)
 
-        except Exception as e:
-            print(f"TTS failed: {e}")
+        if response.status_code == 200:
+            return base64.b64encode(response.content).decode('utf-8')
+        else:
+            print(f"TTS Error: {response.status_code} - {response.text}")
+            return None
 
-class AICompanion:
-    """The main class that brings everything together"""
-
-    def __init__(self, openai_api_key, elevenlabs_api_key, voice_id):
-        # Set up OpenAI
-        openai.api_key = openai_api_key
-
-        # Initialize components
-        self.personality = PersonalityCore()
-        self.memory = MemorySystem()
-        self.voice = VoiceHandler(elevenlabs_api_key, voice_id)
-
-        self.is_listening = False
-        self.running = True
-
-        print("AI Companion initialized. Press and hold SPACE to talk, ESC to quit.")
-
-    def generate_response(self, user_input):
-        """Generate AI response using GPT-4o"""
-        try:
-            # Get conversation history
-            history = self.memory.get_conversation_history()
-
-            # Build the system prompt with personality
-            system_prompt = self.personality.build_system_prompt(history)
-
-            # Create the full message list
-            messages = [
-                {"role": "system", "content": system_prompt},
-                *history[-20:],  # Include recent history
-                {"role": "user", "content": user_input}
-            ]
-
-            # Call GPT-4o
-            response = openai.ChatCompletion.create(
-                model="gpt-4o",
-                messages=messages,
-                max_tokens=150,  # Keep responses conversational
-                temperature=0.7,  # Some randomness for personality
-            )
-
-            ai_response = response.choices[0].message.content.strip()
-
-            # Store the conversation
-            self.memory.store_conversation(user_input, ai_response)
-
-            return ai_response
-
-        except Exception as e:
-            print(f"Error generating response: {e}")
-            return "Sorry, I'm having a brain fart. Can you try that again?"
-
-    def handle_push_to_talk(self):
-        """Handle push-to-talk functionality"""
-        while self.running:
-            try:
-                # Check if space is pressed
-                if keyboard.is_pressed('space') and not self.is_listening:
-                    self.is_listening = True
-                    print("🎤 Listening...")
-
-                    # Get speech input
-                    user_input = self.voice.listen_for_speech()
-
-                    if user_input and user_input != "Sorry, I couldn't understand that.":
-                        print(f"You said: {user_input}")
-
-                        # Generate response
-                        ai_response = self.generate_response(user_input)
-                        print(f"AI: {ai_response}")
-
-                        # Speak the response
-                        self.voice.text_to_speech(ai_response)
-
-                    self.is_listening = False
-
-                # Check for exit
-                if keyboard.is_pressed('esc'):
-                    print("Goodbye!")
-                    self.running = False
-                    break
-
-                asyncio.sleep(0.1)  # Small delay to prevent CPU spinning
-
-            except Exception as e:
-                print(f"Error in main loop: {e}")
-                asyncio.sleep(1)
-
-def main():
-    """Main function to run the AI companion"""
-
-    # Configuration - YOU NEED TO FILL THESE IN
-    OPENAI_API_KEY = "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"
-
-    ELEVENLABS_API_KEY = "sk_17f9072369dc2ac6e923eeb8fc1df4664be2ecb5dd7c7d58" 
-    ELEVENLABS_VOICE_ID = "WZlYpi1yf6zJhNWXih74"
-
-    if "your-" in OPENAI_API_KEY:
-        print("ERROR: You need to set your API keys in the main() function!")
-        return
-
-    try:
-        # Create and run the companion
-        companion = AICompanion(OPENAI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID)
-        companion.handle_push_to_talk()
-
-    except KeyboardInterrupt:
-        print("\nShutting down...")
     except Exception as e:
-        print(f"Fatal error: {e}")
+        print(f"TTS failed: {e}")
+        return None
 
-if __name__ == "__main__":
-    main()
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    """Handle text-based chat"""
+    try:
+        data = request.get_json()
+        user_input = data.get('message', '').strip()
+
+        if not user_input:
+            return jsonify({"error": "No message provided"}), 400
+
+        # Generate AI response
+        ai_response = generate_response(user_input)
+
+        # Generate TTS audio
+        audio_response = text_to_speech(ai_response)
+
+        return jsonify({
+            "user_message": user_input,
+            "ai_response": ai_response,
+            "audio_response": audio_response,
+            "status": "success"
+        })
+
+    except Exception as e:
+        print(f"Chat route error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/voice', methods=['POST'])
+def voice_input():
+    print("=== VOICE ROUTE HIT ===")
+    try:
+        print("Getting audio file...")
+        audio_file = request.files.get('audio')
+        print(f"Audio file: {audio_file}")
+        # rest of your code...
+
+        if not audio_file:
+            return jsonify({"error": "No audio file"}), 400
+        print(f"About to call Whisper API...")
+        print(f"openai_client exists: {openai_client is not     None}")
+    
+        
+        
+        # Create a temporary file-like object that Whisper can handle
+        import io
+        audio_data = audio_file.read()
+        audio_buffer = io.BytesIO(audio_data)
+        audio_buffer.name = "audio.webm"  # Give it a filename
+
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_buffer
+        )
+        
+
+        return jsonify({
+            "transcript": transcript.text.strip(),
+            "status": "success"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+if __name__ == '__main__':
+    print("Starting AI Companion...")
+    print(f"OpenAI configured: {openai_client is not None}")
+    print(f"ElevenLabs configured: {ELEVENLABS_API_KEY is not None}")
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
+    
