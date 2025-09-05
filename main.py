@@ -233,6 +233,25 @@ def voice_input():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/ask", methods=["POST"])
+def ask():
+    prompt = (request.form.get("prompt") or "").strip()
+    print(f"[ASK] {prompt!r}")
+    if not prompt:
+        return jsonify({"status":"error","error":"no prompt"}), 400
+
+    trig = "remember that"
+    if prompt.lower().startswith(trig):
+        cleaned = prompt[len(trig):].strip(" :.-")
+        if cleaned:
+            memory.store_conversation(f"Remember: {cleaned}", "I'll remember that.")
+            print(f"[ASK] ✅ stored → {cleaned!r}")
+            return jsonify({"status":"ok","reply":f"Saved: {cleaned}"})
+        return jsonify({"status":"ok","reply":"Nothing to remember."})
+
+    ai = generate_response(prompt)
+    return jsonify({"status":"success","reply":ai})
 if __name__ == '__main__':
     print("Starting AI Companion...")
     print(f"OpenAI configured: {openai_client is not None}")

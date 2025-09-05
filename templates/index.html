@@ -190,28 +190,75 @@
         const loading = document.getElementById('loading');
 
         // Send text message
+        // PATCH START — memory-aware routing (revert = paste your old function back)
+        const MEM_TRIGGER = /^remember that\b/i;
+
         async function sendTextMessage() {
-            const message = textInput.value.trim();
-            if (!message) return;
+          const message = textInput.value.trim();
+          if (!message) return;
 
-            // Disable input while processing
-            textInput.disabled = true;
-            sendButton.disabled = true;
-            textInput.value = '';
+          textInput.disabled = true;
+          sendButton.disabled = true;
+          textInput.value = '';
+          addMessage(message, 'user');
+          updateStatus('Processing...');
+          showLoading(true);
 
-            // Add user message
-            addMessage(message, 'user');
-            updateStatus('Processing...');
-            showLoading(true);
+          try {
+            const isMem = MEM_TRIGGER.test(message);
+            const res = await fetch(isMem ? '/ask' : '/chat', {
+              method: 'POST',
+              headers: isMem
+                ? { 'Content-Type': 'application/x-www-form-urlencoded' }
+                : { 'Content-Type': 'application/json' },
+              body: isMem
+                ? new URLSearchParams({ prompt: message })
+                : JSON.stringify({ message })
+            });
+            const data = await res.json();
 
-            try {
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: message })
-                });
+            if (isMem) {
+              addMessage(String((data && (data.reply || data.status)) || 'Saved.'), 'ai');
+            } else if (data && data.status === 'success') {
+              addMessage(data.ai_response, 'ai');
+              if (data.audio_response) playAudio(data.audio_response);
+            } else {
+              showError((data && data.error) || 'Chat failed');
+            }
+          } catch (err) {
+            showError(err.message || 'Failed to send message.');
+          } finally {
+            showLoading(false);
+            updateStatus('Ready to chat');
+            textInput.disabled = false;
+            sendButton.disabled = false;
+            textInput.focus();
+          }
+        }
+
+        async function postAsk(prompt) {
+          console.log('[MEM_ROUTE] /ask', prompt);
+          const res = await fetch('/ask', {
+            method: 'POST',
+            headers: {'Content-Type':'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({ prompt })
+          });
+          if (!res.ok) throw new Error(`ask route failed: ${res.status}`);
+          return res.json();
+        }
+
+        async function postChat(message) {
+          console.log('[CHAT_ROUTE] /chat', message);
+          const res = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ message })
+          });
+          if (!res.ok) throw new Error(`chat route failed: ${res.status});
+          return res.json();
+        }
+        // PATCH END
+
 
                 const result = await response.json();
 

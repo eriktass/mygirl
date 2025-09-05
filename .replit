@@ -1,9 +1,9 @@
-entrypoint = "main.py"
-modules = ["python-3.11", "python-3.8"]
+modules = ["web", "python-3.11"]
+run = "python main.py"
 
 [nix]
 channel = "stable-25_05"
-packages = ["ffmpeg-full"]
+packages = ["ffmpeg-full", "glibcLocales"]
 
 [unitTest]
 language = "python3"
@@ -12,9 +12,36 @@ language = "python3"
 requiredFiles = [".replit", "replit.nix"]
 
 [deployment]
-run = ["python3", "main.py"]
+run = ["sh", "-c", "python main.py"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[agent]
+expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Flask App"
+
+[[workflows.workflow]]
+name = "Flask App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"

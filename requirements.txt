@@ -2,19 +2,18 @@
 # For building an AI companion that won't judge your life choices
 
 # Core dependencies that actually work on Chromebook
-flask==2.3.3
 openai==1.102.0  # Use whatever version pip actually installs
-requests==2.31.0
-elevenlabs==2.11.0
-
+requests
 # Optional but recommended
 python-dotenv==1.0.0  # For environment variable management (API keys)
 
 # Development and debugging
 rich==13.7.0  # Pretty terminal output for debugging
 openai
-elevenlabs
-keyboard
 pydub
 speechrecognition
-gunicorn==21.2.0
+textblob
+scikit-learn
+flask
+elevenlabs==2.1
+
