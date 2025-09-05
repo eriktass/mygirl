@@ -168,7 +168,7 @@
     <div class="chat-container">
         <div class="chat-messages" id="chatMessages">
             <div class="ai-message">
-               Is there something I can help you with or should I just suck your dick
+               hold my beer i smell ozone
             </div>
         </div>
 
@@ -190,75 +190,28 @@
         const loading = document.getElementById('loading');
 
         // Send text message
-        // PATCH START — memory-aware routing (revert = paste your old function back)
-        const MEM_TRIGGER = /^remember that\b/i;
-
         async function sendTextMessage() {
-          const message = textInput.value.trim();
-          if (!message) return;
+            const message = textInput.value.trim();
+            if (!message) return;
 
-          textInput.disabled = true;
-          sendButton.disabled = true;
-          textInput.value = '';
-          addMessage(message, 'user');
-          updateStatus('Processing...');
-          showLoading(true);
+            // Disable input while processing
+            textInput.disabled = true;
+            sendButton.disabled = true;
+            textInput.value = '';
 
-          try {
-            const isMem = MEM_TRIGGER.test(message);
-            const res = await fetch(isMem ? '/ask' : '/chat', {
-              method: 'POST',
-              headers: isMem
-                ? { 'Content-Type': 'application/x-www-form-urlencoded' }
-                : { 'Content-Type': 'application/json' },
-              body: isMem
-                ? new URLSearchParams({ prompt: message })
-                : JSON.stringify({ message })
-            });
-            const data = await res.json();
+            // Add user message
+            addMessage(message, 'user');
+            updateStatus('Processing...');
+            showLoading(true);
 
-            if (isMem) {
-              addMessage(String((data && (data.reply || data.status)) || 'Saved.'), 'ai');
-            } else if (data && data.status === 'success') {
-              addMessage(data.ai_response, 'ai');
-              if (data.audio_response) playAudio(data.audio_response);
-            } else {
-              showError((data && data.error) || 'Chat failed');
-            }
-          } catch (err) {
-            showError(err.message || 'Failed to send message.');
-          } finally {
-            showLoading(false);
-            updateStatus('Ready to chat');
-            textInput.disabled = false;
-            sendButton.disabled = false;
-            textInput.focus();
-          }
-        }
-
-        async function postAsk(prompt) {
-          console.log('[MEM_ROUTE] /ask', prompt);
-          const res = await fetch('/ask', {
-            method: 'POST',
-            headers: {'Content-Type':'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({ prompt })
-          });
-          if (!res.ok) throw new Error(`ask route failed: ${res.status}`);
-          return res.json();
-        }
-
-        async function postChat(message) {
-          console.log('[CHAT_ROUTE] /chat', message);
-          const res = await fetch('/chat', {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ message })
-          });
-          if (!res.ok) throw new Error(`chat route failed: ${res.status});
-          return res.json();
-        }
-        // PATCH END
-
+            try {
+                const response = await fetch('/chat', {
+       method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message })
+                });
 
                 const result = await response.json();
 
@@ -420,5 +373,77 @@
         }
         
     </script>
+    <script>
+    /* ===== TOAST DROP-IN (no surgery to your code) ===== */
+    (function () {
+      // inject CSS
+      const css = `
+        .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(20px);
+          background:rgba(0,0,0,.85);color:#fff;padding:12px 16px;border-radius:12px;
+          font-size:.95rem;pointer-events:none;opacity:0;transition:opacity .18s,transform .18s;z-index:9999}
+        .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+      `;
+      const style = document.createElement('style');
+      style.id = 'toast-style';
+      style.textContent = css;
+      document.head.appendChild(style);
+
+      // inject container
+      const box = document.createElement('div');
+      box.id = 'toast';
+      box.className = 'toast';
+      document.body.appendChild(box);
+
+      // helper
+      let __toastTimer = null;
+      window.showToast = function (msg, ms = 1600) {
+        box.textContent = msg;
+        box.classList.add('show');
+        clearTimeout(__toastTimer);
+        __toastTimer = setTimeout(() => box.classList.remove('show'), ms);
+      };
+
+      // wrap fetch to auto-toast on /ask + /chat
+      const _fetch = window.fetch.bind(window);
+      window.fetch = async function (...args) {
+        const url = String(args[0] || '');
+        const kind = url.includes('/ask') ? 'ask' : (url.includes('/chat') ? 'chat' : '');
+        try {
+          const res = await _fetch(...args);
+          if (kind === 'ask') showToast(res.ok ? 'Saved to memory' : 'Save failed');
+          else if (kind === 'chat') showToast(res.ok ? 'Sent' : 'Send failed');
+          return res;
+        } catch (err) {
+          if (kind) showToast('Request failed');
+          throw err;
+        }
+      };
+
+      // watch record button text to signal start/stop without touching your code
+      document.addEventListener('DOMContentLoaded', () => {
+        const recordBtn = document.getElementById('recordButton');
+        const statusEl  = document.getElementById('status');
+
+        if (recordBtn) {
+          const ob = new MutationObserver(() => {
+            const t = recordBtn.textContent.trim();
+            if (t.includes('Stop'))   showToast('Recording… release to stop', 2000);
+            if (t.includes('Record')) showToast('Processing audio…', 1200);
+          });
+          ob.observe(recordBtn, { childList: true, subtree: true, characterData: true });
+        }
+
+        // light touch: toast when status flips to transcribing
+        if (statusEl) {
+          const ob2 = new MutationObserver(() => {
+            const s = statusEl.textContent.toLowerCase();
+            if (s.includes('transcrib')) showToast('Transcribing…');
+          });
+          ob2.observe(statusEl, { childList: true, subtree: true, characterData: true });
+        }
+      });
+    })();
+    </script>
+
 </body>
 </html>
