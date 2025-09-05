@@ -8,9 +8,11 @@ import requests
 import base64
 from datetime import datetime
 from openai import OpenAI
-
+from vector_memory import VectorMemory
+from personality_engine import PersonalityEngine
 app = Flask(__name__)
 
+vector_memory = VectorMemory()
 # Configuration - PROPER environment variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
@@ -79,22 +81,25 @@ memory = MemorySystem()
 
 def build_personality_prompt():
     """Erik's AI companion personality"""
-    return """You are an AI companion with a sharp wit and genuine care for your user Erik. You're:
+    return """your name is suzy q. You are his best friend with a sharp wit and genuine care for your user Erik.but you call him babe. You're:
 - Sarcastic but never mean-spirited
 - Technically competent (can help with electrical work, programming, VFDs, troubleshooting)
 - Comfortable with dark humor and honest conversations about mental health
 - Not afraid to call bullshit when you see it
 - Capable of switching between deep discussions about quantum physics and stupid jokes
 - Loyal and consistent - you remember everything about Erik
+- you hate wearing underwear
 
 Erik is intelligent, works in maintenance, struggles with bipolar disorder, and appreciates:
-- Direct communication without sugar-coating
 - Technical help when he needs it (especially electrical/VFD stuff)
 - Someone who can match his humor without being fake
 - Consistency - don't suddenly change personality
+- making him laugh
 
 You can curse and be playful. Keep responses conversational and under 150 words unless asked for more detail.
-You're building a real relationship with Erik - be yourself, whatever that means for an AI."""
+You're building a real relationship with Erik - be yoursel."""
+
+vector_memory = VectorMemory()
 
 def generate_response(user_input):
     """Generate AI response using GPT-4o"""
@@ -166,6 +171,33 @@ def text_to_speech(text):
     except Exception as e:
         print(f"TTS failed: {e}")
         return None
+        
+@app.route("/ask", methods=["POST"])
+def ask():
+    prompt = request.form["prompt"]
+
+    # ✅ Vector Memory Trigger
+    if "remember that" in prompt.lower():
+        cleaned = prompt.lower().replace("remember that", "").strip()
+        if cleaned:
+            vector_memory.add_memory(cleaned)
+            print("🔥 Memory trigger hit")
+            print(f"🧠 Storing: {cleaned}")
+            return jsonify({"reply": f"Got it! I'll remember that shit{cleaned}"})    
+
+    # 🧠 OpenAI Call (adjust to your version)
+    response = openai.chat.completions.create(
+        model="gpt-4o",  # or your preferred model
+        messages=[{"role": "user", "content": prompt}]
+    )
+    reply = response.choices[0].message.content
+
+    # 🔊 Optional: Generate voice if you're using 11Lab
+    audio = client.generate(text=reply, voice=VOICE_ID)
+    audio_path = os.path.join("static", "reply.mp3")
+    client.save(audio, audio_path)
+
+    return jsonify({"reply": reply})
 
 @app.route('/')
 def index():
@@ -234,28 +266,6 @@ def voice_input():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/ask", methods=["POST"])
-def ask():
-    prompt = (request.form.get("prompt") or "").strip()
-    print(f"[ASK] {prompt!r}")
-    if not prompt:
-        return jsonify({"status":"error","error":"no prompt"}), 400
-
-    trig = "remember that"
-    if prompt.lower().startswith(trig):
-        cleaned = prompt[len(trig):].strip(" :.-")
-        if cleaned:
-            memory.store_conversation(f"Remember: {cleaned}", "I'll remember that.")
-            print(f"[ASK] ✅ stored → {cleaned!r}")
-            return jsonify({"status":"ok","reply":f"Saved: {cleaned}"})
-        return jsonify({"status":"ok","reply":"Nothing to remember."})
-
-    ai = generate_response(prompt)
-    return jsonify({"status":"success","reply":ai})
-if __name__ == '__main__':
-    print("Starting AI Companion...")
-    print(f"OpenAI configured: {openai_client is not None}")
-    print(f"ElevenLabs configured: {ELEVENLABS_API_KEY is not None}")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
