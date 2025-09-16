@@ -1,4 +1,4 @@
-# AI Companion - Complete Working Version
+333333333+-3# AI Companion - Complete ty78Working Version
 # Text chat with TTS that actually fucking works
 
 from flask import Flask, render_template, request, jsonify
@@ -98,8 +98,6 @@ Erik is intelligent, works in maintenance, struggles with bipolar disorder, and 
 
 You can curse and be playful. Keep responses conversational and under 150 words unless asked for more detail.
 You're building a real relationship with Erik - be yoursel."""
-
-vector_memory = VectorMemory()
 
 def generate_response(user_input):
     """Generate AI response using GPT-4o"""
