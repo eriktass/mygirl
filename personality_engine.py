@@ -10,11 +10,7 @@ class PersonalityEngine:
     def load_vector(self):
         try:
             with open(self.file, 'r') as f:
-                data = json.load(f)
-                # Convert regular dicts back to defaultdicts after JSON loading
-                data['topics'] = defaultdict(int, data.get('topics', {}))
-                data['phrases'] = defaultdict(int, data.get('phrases', {}))
-                return data
+                return json.load(f)
         except FileNotFoundError:
             return {
                 'topics': defaultdict(int),
@@ -32,11 +28,7 @@ class PersonalityEngine:
             json.dump(self.vector, f, indent=4)
 
     def update_vector(self, user_input):
-        try:
-            blob = TextBlob(user_input)
-            sentiment = blob.sentiment.polarity
-        except Exception:
-            sentiment = 0.0
+        sentiment = TextBlob(user_input).sentiment.polarity
         if sentiment > 0.1:
             self.vector['sentiment']['positive'] += 1
         elif sentiment < -0.1:
