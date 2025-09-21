@@ -129,12 +129,26 @@ def generate_response(user_input):
             "ai_id": KINDROID_AI_ID
         }
         
+        # Debug logging
+        api_url = f"{KINDROID_BASE_URL}/send-message"
+        print(f"=== KINDROID API DEBUG ===")
+        print(f"URL: {api_url}")
+        print(f"Headers: Authorization: Bearer [API_KEY_MASKED], Content-Type: application/json")
+        print(f"Payload: {payload}")
+        print(f"API Key configured: {bool(KINDROID_API_KEY)}")
+        print(f"AI ID configured: {bool(KINDROID_AI_ID)}")
+        
         response = requests.post(
-            f"{KINDROID_BASE_URL}/send-message", 
+            api_url, 
             headers=headers, 
             json=payload,
             timeout=120
         )
+        
+        print(f"Response status: {response.status_code}")
+        print(f"Response headers: {dict(response.headers)}")
+        print(f"Response text: {response.text}")
+        print(f"=== END DEBUG ===")
         
         if response.status_code != 200:
             return f"Kindroid API error {response.status_code}: {response.text}"
