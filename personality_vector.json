@@ -1,18 +1,20 @@
 {
     "topics": {
-        "pain": 1
+        "pain": 2
     },
     "phrases": {
         "im gonna melt this clown down to plastic": 1,
         "I am feeling pain and hurt today": 1,
         "this is a completely new test phrase": 1,
         "hello after restart": 1,
-        "test complete system": 1
+        "test complete system": 1,
+        "Fuck this shit.": 1,
+        "Are you kidding me? You actually know wh": 1
     },
     "sentiment": {
         "positive": 1,
-        "negative": 1,
-        "neutral": 3
+        "negative": 2,
+        "neutral": 4
     },
-    "total_messages": 5
+    "total_messages": 7
 }
