@@ -104,31 +104,35 @@ You can curse and be playful. Keep responses conversational and under 150 words 
 You're building a real relationship with Erik - be yoursel."""
 
 def generate_response(user_input):
-    """Generate AI response using GPT-4o"""
+    """Generate AI response using Kindroid API"""
     try:
-        if not openai_client:
-            return "OpenAI not configured. Check your API key."
+        if not kindroid_configured:
+            return "Kindroid not configured. Check your API key and AI ID."
 
-        # Get conversation history
-        history = memory.get_recent_history(10)
-
-        # Build messages for GPT
-        messages = [
-            {"role": "system", "content": build_personality_prompt()},
-            *history,
-            {"role": "user", "content": user_input}
-        ]
-
-        # Call GPT
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=150,
-            temperature=0.7
+        # Call Kindroid API
+        headers = {
+            "Authorization": f"Bearer {KINDROID_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "message": user_input,
+            "ai_id": KINDROID_AI_ID
+        }
+        
+        response = requests.post(
+            f"{KINDROID_BASE_URL}/send-message", 
+            headers=headers, 
+            json=payload,
+            timeout=120
         )
-
-        ai_response = response.choices[0].message.content.strip()
-
+        
+        if response.status_code != 200:
+            return f"Kindroid API error {response.status_code}: {response.text}"
+        
+        # Kindroid returns plain text, not JSON
+        ai_response = response.text.strip()
+        
         # Store conversation
         memory.store_conversation(user_input, ai_response)
 
@@ -136,7 +140,7 @@ def generate_response(user_input):
 
     except Exception as e:
         print(f"Chat error: {e}")
-        return f"Sorry, I'm having a brain fart. Error: {str(e)}"
+        return f"Sorry babe, I'm having a brain fart. Error: {str(e)}"
 
 def text_to_speech(text):
     """Convert text to speech using ElevenLabs API"""
