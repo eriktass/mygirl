@@ -7,19 +7,23 @@ import os
 import requests
 import base64
 from datetime import datetime
-from openai import OpenAI
+from dotenv import load_dotenv
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
+load_dotenv()
+
 app = Flask(__name__)
 
 vector_memory = VectorMemory()
 # Configuration - PROPER environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  
+KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
 VOICE_ID = os.getenv("VOICE_ID")   
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Initialize Kindroid API configuration
+KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
+kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
 
 class MemorySystem:
     """Simple memory storage that actually works"""
