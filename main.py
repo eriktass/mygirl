@@ -1,4 +1,4 @@
-333333333+-3# AI Companion - Complete ty78Working Version
+# AI Companion - Complete Working Version
 # Text chat with TTS that actually fucking works
 
 from flask import Flask, render_template, request, jsonify
@@ -118,63 +118,19 @@ You're building a real relationship with Erik - be yoursel."""
 
 def generate_response(user_input):
     """Generate AI response using Kindroid API"""
+    # TEMPORARY: Test with hardcoded response first
+    ai_response = f"Hey babe! You said: '{user_input}'. I'm working on getting my brain connected properly but at least the basic chat flow is working now!"
+    
+    # Store conversation
+    memory.store_conversation(user_input, ai_response)
+    
+    # Update personality vector
     try:
-        if not kindroid_configured:
-            return "Kindroid not configured. Check your API key and AI ID."
-
-        # Build the message with personality context
-        personality_context = build_personality_prompt()
-        
-        # Get recent conversation history for context
-        history = memory.get_recent_history(5)
-        context_messages = []
-        for msg in history:
-            if msg["role"] == "user":
-                context_messages.append(f"Erik: {msg['content']}")
-            else:
-                context_messages.append(f"Suzy Q: {msg['content']}")
-        
-        # Combine personality, history, and current message
-        full_message = f"{personality_context}\n\nRecent conversation:\n" + "\n".join(context_messages[-10:]) + f"\n\nErik: {user_input}\nSuzy Q:"
-
-        # Call Kindroid API
-        headers = {
-            "Authorization": f"Bearer {KINDROID_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "message": full_message,
-            "ai_id": KINDROID_AI_ID
-        }
-        
-        response = requests.post(
-            f"{KINDROID_BASE_URL}/send-message", 
-            headers=headers, 
-            json=payload,
-            timeout=30
-        )
-        
-        response.raise_for_status()
-        
-        # Check if response has content
-        if not response.text.strip():
-            return "Sorry babe, got an empty response from Kindroid"
-            
-        # Kindroid returns plain text, not JSON
-        ai_response = response.text.strip()
-        
-        # Store conversation
-        memory.store_conversation(user_input, ai_response)
-        
-        # Update personality vector
         personality_engine.update_vector(user_input)
-
-        return ai_response
-
     except Exception as e:
-        print(f"Chat error: {e}")
-        return f"Sorry babe, I'm having a brain fart. Error: {str(e)}"
+        print(f"Personality engine error: {e}")
+
+    return ai_response
 
 def text_to_speech(text):
     """Convert text to speech using ElevenLabs API"""

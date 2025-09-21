@@ -32,8 +32,11 @@ class PersonalityEngine:
             json.dump(self.vector, f, indent=4)
 
     def update_vector(self, user_input):
-        blob = TextBlob(user_input)
-        sentiment = blob.sentiment.polarity
+        try:
+            blob = TextBlob(user_input)
+            sentiment = blob.sentiment.polarity
+        except Exception:
+            sentiment = 0.0
         if sentiment > 0.1:
             self.vector['sentiment']['positive'] += 1
         elif sentiment < -0.1:
