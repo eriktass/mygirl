@@ -24,8 +24,9 @@ Preferred communication style: Simple, everyday language.
 
 #### Memory Management
 - **SQLite conversation storage**: Persistent storage of chat history with timestamp tracking
-- **Vector memory system**: TF-IDF based semantic search for relevant context retrieval
-- **Personality engine**: Dynamic personality adaptation based on user interaction patterns and sentiment analysis
+- **Vector memory system**: TF-IDF based semantic search with automatic memory extraction from conversations
+- **Personality engine**: Integrated with vector memory for semantic keyword recall and dynamic personality adaptation
+- **Automatic memory processing**: Intelligent extraction of meaningful conversation content without manual triggers
 
 #### AI Integration
 - **Multiple AI provider support**: Primary integration with Kindroid API, fallback to OpenAI GPT-4
@@ -34,7 +35,7 @@ Preferred communication style: Simple, everyday language.
 
 #### Voice Processing
 - **Text-to-Speech**: ElevenLabs integration for AI voice responses
-- **Speech-to-Text**: Whisper API for voice input transcription
+- **Speech-to-Text**: AssemblyAI integration for voice input transcription (replaced Whisper)
 - **Audio handling**: Base64 encoding for audio file transfers
 
 ### Data Storage Solutions
@@ -51,7 +52,8 @@ Preferred communication style: Simple, everyday language.
 
 ### AI Services
 - **Kindroid API**: Primary AI conversation provider with custom AI personality support
-- **OpenAI API**: Fallback AI provider and Whisper speech-to-text service
+- **OpenAI API**: Used in /ask route for enhanced personality-driven responses with semantic context
+- **AssemblyAI API**: Speech-to-text transcription service (replaced Whisper)
 - **ElevenLabs API**: Text-to-speech voice synthesis service
 
 ### Python Libraries
@@ -61,7 +63,7 @@ Preferred communication style: Simple, everyday language.
 - **TextBlob**: Sentiment analysis for personality tracking
 - **requests**: HTTP client for external API calls
 - **pydub**: Audio file processing
-- **SpeechRecognition**: Alternative speech-to-text processing
+- **AssemblyAI**: Primary speech-to-text service
 
 ### Frontend Dependencies
 - **Vanilla JavaScript**: No frontend frameworks, using native browser APIs
