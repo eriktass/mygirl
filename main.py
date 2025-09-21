@@ -191,32 +191,6 @@ def text_to_speech(text):
         print(f"TTS failed: {e}")
         return None
         
-@app.route("/ask", methods=["POST"])
-def ask():
-    prompt = request.form["prompt"]
-
-    # ✅ Vector Memory Trigger
-    if "remember that" in prompt.lower():
-        cleaned = prompt.lower().replace("remember that", "").strip()
-        if cleaned:
-            vector_memory.add_memory(cleaned)
-            print("🔥 Memory trigger hit")
-            print(f"🧠 Storing: {cleaned}")
-            return jsonify({"reply": f"Got it! I'll remember that shit{cleaned}"})    
-
-    # 🧠 OpenAI Call (adjust to your version)
-    response = openai.chat.completions.create(
-        model="gpt-4o",  # or your preferred model
-        messages=[{"role": "user", "content": prompt}]
-    )
-    reply = response.choices[0].message.content
-
-    # 🔊 Optional: Generate voice if you're using 11Lab
-    audio = client.generate(text=reply, voice=VOICE_ID)
-    audio_path = os.path.join("static", "reply.mp3")
-    client.save(audio, audio_path)
-
-    return jsonify({"reply": reply})
 
 @app.route('/')
 def index():
