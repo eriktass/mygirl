@@ -13,6 +13,7 @@ from personality_engine import PersonalityEngine
 app = Flask(__name__)
 
 vector_memory = VectorMemory()
+personality_engine = PersonalityEngine()
 # Configuration - PROPER environment variables
 KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  # Your API key starting with "kn-"
 KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")      # Your AI ID from Kindroid settings
@@ -151,6 +152,9 @@ def generate_response(user_input):
         
         # Store conversation
         memory.store_conversation(user_input, ai_response)
+        
+        # Update personality vector
+        personality_engine.update_vector(user_input)
 
         return ai_response
 

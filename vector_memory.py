@@ -10,8 +10,13 @@ class VectorMemory:
 
     def load_memory(self):
         if os.path.exists(self.memory_file):
-            with open(self.memory_file, "r") as f:
-                return json.load(f)
+            try:
+                with open(self.memory_file, "r") as f:
+                    content = f.read().strip()
+                    if content:
+                        return json.loads(content)
+            except (json.JSONDecodeError, ValueError):
+                pass
         return []
 
     def save_memory(self):
