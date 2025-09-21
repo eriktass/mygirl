@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 import assemblyai as aai
+import openai
+from elevenlabs import client
 load_dotenv()
 
 app = Flask(__name__)
