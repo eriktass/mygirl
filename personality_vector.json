@@ -1,12 +1,16 @@
 {
-    "topics": {},
+    "topics": {
+        "pain": 1
+    },
     "phrases": {
-        "im gonna melt this clown down to plastic": 1
+        "im gonna melt this clown down to plastic": 1,
+        "I am feeling pain and hurt today": 1,
+        "this is a completely new test phrase": 1
     },
     "sentiment": {
-        "positive": 0,
+        "positive": 1,
         "negative": 1,
-        "neutral": 0
+        "neutral": 1
     },
-    "total_messages": 1
+    "total_messages": 3
 }

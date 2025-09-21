@@ -10,7 +10,11 @@ class PersonalityEngine:
     def load_vector(self):
         try:
             with open(self.file, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                # Convert regular dicts back to defaultdicts after JSON loading
+                data['topics'] = defaultdict(int, data.get('topics', {}))
+                data['phrases'] = defaultdict(int, data.get('phrases', {}))
+                return data
         except FileNotFoundError:
             return {
                 'topics': defaultdict(int),
