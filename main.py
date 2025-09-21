@@ -7,7 +7,7 @@ import os
 import requests
 import base64
 from datetime import datetime
-from openai import OpenAI
+# OpenAI import removed - now using Kindroid API
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 app = Flask(__name__)
