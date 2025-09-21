@@ -140,11 +140,20 @@ def generate_response(user_input):
             timeout=30
         )
         
+        print(f"API Response Status: {response.status_code}")
+        print(f"API Response Headers: {response.headers}")
+        print(f"API Response Text: {response.text[:500]}...")  # First 500 chars
+        
         response.raise_for_status()
+        
+        # Check if response has content before trying to parse JSON
+        if not response.text.strip():
+            return "Sorry babe, got an empty response from Kindroid"
+            
         result = response.json()
         
         # Extract AI response (adjust based on Kindroid's response format)
-        ai_response = result.get("response", result.get("message", "No response received"))
+        ai_response = result.get("response", result.get("message", result.get("content", "No response received")))
         
         # Store conversation
         memory.store_conversation(user_input, ai_response)
