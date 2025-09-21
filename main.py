@@ -10,6 +10,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
+import assemblyai as aai
 load_dotenv()
 
 app = Flask(__name__)
@@ -19,11 +20,19 @@ vector_memory = VectorMemory()
 KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  
 KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
-VOICE_ID = os.getenv("VOICE_ID")   
+VOICE_ID = os.getenv("VOICE_ID")
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")   
 
 # Initialize Kindroid API configuration
 KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
 kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
+
+# Initialize AssemblyAI configuration
+if ASSEMBLYAI_API_KEY:
+    aai.settings.api_key = ASSEMBLYAI_API_KEY
+    assemblyai_configured = True
+else:
+    assemblyai_configured = False
 
 class MemorySystem:
     """Simple memory storage that actually works"""
@@ -247,25 +256,32 @@ def voice_input():
 
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
-        print(f"About to call Whisper API...")
-        print(f"openai_client exists: {openai_client is not     None}")
+        print(f"About to call AssemblyAI...")
+        print(f"AssemblyAI configured: {assemblyai_configured}")
     
+        # Use AssemblyAI for speech-to-text transcription
+        if not assemblyai_configured:
+            return jsonify({"error": "AssemblyAI not configured. Please set ASSEMBLYAI_API_KEY environment variable."}), 500
         
-        
-        # Create a temporary file-like object that Whisper can handle
-        import io
+        # Save audio file temporarily
+        import tempfile
         audio_data = audio_file.read()
-        audio_buffer = io.BytesIO(audio_data)
-        audio_buffer.name = "audio.webm"  # Give it a filename
-
-        transcript = openai_client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_buffer
-        )
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_file:
+            temp_file.write(audio_data)
+            temp_path = temp_file.name
+        
+        try:
+            # Transcribe with AssemblyAI
+            transcriber = aai.Transcriber()
+            transcript = transcriber.transcribe(temp_path)
+            transcript_text = transcript.text if transcript.text else "Could not transcribe audio"
+        finally:
+            # Clean up temp file
+            os.unlink(temp_path)
         
 
         return jsonify({
-            "transcript": transcript.text.strip(),
+            "transcript": transcript_text,
             "status": "success"
         })
 
