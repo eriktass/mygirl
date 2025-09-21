@@ -226,6 +226,25 @@ def chat():
         print(f"Chat route error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route("/ask", methods=["POST"])
+def ask():
+    prompt = (request.form.get("prompt") or "").strip()
+    print(f"[ASK] {prompt!r}")
+    if not prompt:
+        return jsonify({"status":"error","error":"no prompt"}), 400
+
+    trig = "remember that"
+    if prompt.lower().startswith(trig):
+        cleaned = prompt[len(trig):].strip(" :.-")
+        if cleaned:
+            vector_memory.add_memory(cleaned)
+            print(f"[ASK] ✅ stored → {cleaned!r}")
+            return jsonify({"status":"ok","reply":f"Saved: {cleaned}"})
+        return jsonify({"status":"ok","reply":"Nothing to remember."})
+
+    ai = generate_response(prompt)
+    return jsonify({"status":"success","reply":ai})
+
 @app.route('/voice', methods=['POST'])
 def voice_input():
     print("=== VOICE ROUTE HIT ===")
