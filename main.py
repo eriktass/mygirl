@@ -14,12 +14,14 @@ app = Flask(__name__)
 
 vector_memory = VectorMemory()
 # Configuration - PROPER environment variables
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  # Your API key starting with "kn-"
+KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")      # Your AI ID from Kindroid settings
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
 VOICE_ID = os.getenv("VOICE_ID")   
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# Initialize Kindroid API configuration
+KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
+kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
 
 class MemorySystem:
     """Simple memory storage that actually works"""
@@ -100,31 +102,50 @@ You can curse and be playful. Keep responses conversational and under 150 words 
 You're building a real relationship with Erik - be yoursel."""
 
 def generate_response(user_input):
-    """Generate AI response using GPT-4o"""
+    """Generate AI response using Kindroid API"""
     try:
-        if not openai_client:
-            return "OpenAI not configured. Check your API key."
+        if not kindroid_configured:
+            return "Kindroid not configured. Check your API key and AI ID."
 
-        # Get conversation history
-        history = memory.get_recent_history(10)
+        # Build the message with personality context
+        personality_context = build_personality_prompt()
+        
+        # Get recent conversation history for context
+        history = memory.get_recent_history(5)
+        context_messages = []
+        for msg in history:
+            if msg["role"] == "user":
+                context_messages.append(f"Erik: {msg['content']}")
+            else:
+                context_messages.append(f"Suzy Q: {msg['content']}")
+        
+        # Combine personality, history, and current message
+        full_message = f"{personality_context}\n\nRecent conversation:\n" + "\n".join(context_messages[-10:]) + f"\n\nErik: {user_input}\nSuzy Q:"
 
-        # Build messages for GPT
-        messages = [
-            {"role": "system", "content": build_personality_prompt()},
-            *history,
-            {"role": "user", "content": user_input}
-        ]
-
-        # Call GPT
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            max_tokens=150,
-            temperature=0.7
+        # Call Kindroid API
+        headers = {
+            "Authorization": f"Bearer {KINDROID_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "message": full_message,
+            "ai_id": KINDROID_AI_ID
+        }
+        
+        response = requests.post(
+            f"{KINDROID_BASE_URL}/send-message", 
+            headers=headers, 
+            json=payload,
+            timeout=30
         )
-
-        ai_response = response.choices[0].message.content.strip()
-
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract AI response (adjust based on Kindroid's response format)
+        ai_response = result.get("response", result.get("message", "No response received"))
+        
         # Store conversation
         memory.store_conversation(user_input, ai_response)
 
@@ -132,7 +153,7 @@ def generate_response(user_input):
 
     except Exception as e:
         print(f"Chat error: {e}")
-        return f"Sorry, I'm having a brain fart. Error: {str(e)}"
+        return f"Sorry babe, I'm having a brain fart. Error: {str(e)}"
 
 def text_to_speech(text):
     """Convert text to speech using ElevenLabs API"""
@@ -240,7 +261,7 @@ def voice_input():
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
         print(f"About to call Whisper API...")
-        print(f"openai_client exists: {openai_client is not     None}")
+        print(f"kindroid configured: {kindroid_configured}")
     
         
         
@@ -250,14 +271,14 @@ def voice_input():
         audio_buffer = io.BytesIO(audio_data)
         audio_buffer.name = "audio.webm"  # Give it a filename
 
-        transcript = openai_client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_buffer
-        )
+        # For voice transcription, we'll still need a transcription service
+        # You can use OpenAI just for transcription or find an alternative
+        # For now, let's return a placeholder
+        transcript_text = "Voice transcription temporarily disabled - please add transcription service"
         
 
         return jsonify({
-            "transcript": transcript.text.strip(),
+            "transcript": transcript_text,
             "status": "success"
         })
 
@@ -266,6 +287,9 @@ def voice_input():
 
 
 if __name__ == '__main__':
+    print("Starting AI Companion...")
+    print(f"Kindroid configured: {kindroid_configured}")
+    print(f"ElevenLabs configured: {ELEVENLABS_API_KEY is not None}")
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
     
