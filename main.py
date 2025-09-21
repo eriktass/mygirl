@@ -7,10 +7,15 @@ import os
 import requests
 import base64
 from datetime import datetime
+from dotenv import load_dotenv
 # OpenAI import removed - now using Kindroid API
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 import assemblyai as aai
+
+# Load environment variables from .env file
+load_dotenv()
+
 app = Flask(__name__)
 
 vector_memory = VectorMemory()
@@ -313,6 +318,7 @@ if __name__ == '__main__':
     print("Starting AI Companion...")
     print(f"Kindroid configured: {kindroid_configured}")
     print(f"ElevenLabs configured: {ELEVENLABS_API_KEY is not None}")
+    print(f"AssemblyAI configured: {assemblyai_configured}")
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
     
