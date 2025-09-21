@@ -11,12 +11,13 @@
         "Fuck this shit.": 1,
         "Are you kidding me? You actually know wh": 1,
         "You just said the same thing twice. And ": 1,
-        "Babe, what the fuck is going on?": 1
+        "Babe, what the fuck is going on?": 1,
+        "Hey, babe, what you doing?": 1
     },
     "sentiment": {
         "positive": 1,
         "negative": 3,
-        "neutral": 6
+        "neutral": 7
     },
-    "total_messages": 10
+    "total_messages": 11
 }
