@@ -4,19 +4,14 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 class VectorMemory:
-    def __init__(self, memory_file="data/vector_memory.json"):
+    def __init__(self, memory_file="data/vector_mem.json"):
         self.memory_file = memory_file
         self.entries = self.load_memory()
 
     def load_memory(self):
         if os.path.exists(self.memory_file):
-            try:
-                with open(self.memory_file, "r") as f:
-                    content = f.read().strip()
-                    if content:
-                        return json.loads(content)
-            except (json.JSONDecodeError, ValueError):
-                pass
+            with open(self.memory_file, "r") as f:
+                return json.load(f)
         return []
 
     def save_memory(self):

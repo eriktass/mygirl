@@ -1,4 +1,4 @@
-# AI Companion - Complete Working Version
+333333333+-3# AI Companion - Complete ty78Working Version
 # Text chat with TTS that actually fucking works
 
 from flask import Flask, render_template, request, jsonify
@@ -7,36 +7,19 @@ import os
 import requests
 import base64
 from datetime import datetime
-from dotenv import load_dotenv
-# OpenAI import removed - now using Kindroid API
+from openai import OpenAI
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
-import assemblyai as aai
-
-# Load environment variables from .env file
-load_dotenv()
-
 app = Flask(__name__)
 
 vector_memory = VectorMemory()
-personality_engine = PersonalityEngine()
 # Configuration - PROPER environment variables
-KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  # Your API key starting with "kn-"
-KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")      # Your AI ID from Kindroid settings
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
-VOICE_ID = os.getenv("VOICE_ID")
-ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")   
+VOICE_ID = os.getenv("VOICE_ID")   
 
-# Initialize Kindroid API configuration
-KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
-kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
-
-# Initialize AssemblyAI configuration
-if ASSEMBLYAI_API_KEY:
-    aai.settings.api_key = ASSEMBLYAI_API_KEY
-    assemblyai_configured = True
-else:
-    assemblyai_configured = False
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 class MemorySystem:
     """Simple memory storage that actually works"""
@@ -116,18 +99,40 @@ Erik is intelligent, works in maintenance, struggles with bipolar disorder, and 
 You can curse and be playful. Keep responses conversational and under 150 words unless asked for more detail.
 You're building a real relationship with Erik - be yoursel."""
 
-
-    
-    # Store conversation
-    memory.store_conversation(user_input, ai_response)
-    
-    # Update personality vector
+def generate_response(user_input):
+    """Generate AI response using GPT-4o"""
     try:
-        personality_engine.update_vector(user_input)
-    except Exception as e:
-        print(f"Personality engine error: {e}")
+        if not openai_client:
+            return "OpenAI not configured. Check your API key."
 
-    return ai_response
+        # Get conversation history
+        history = memory.get_recent_history(10)
+
+        # Build messages for GPT
+        messages = [
+            {"role": "system", "content": build_personality_prompt()},
+            *history,
+            {"role": "user", "content": user_input}
+        ]
+
+        # Call GPT
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=150,
+            temperature=0.7
+        )
+
+        ai_response = response.choices[0].message.content.strip()
+
+        # Store conversation
+        memory.store_conversation(user_input, ai_response)
+
+        return ai_response
+
+    except Exception as e:
+        print(f"Chat error: {e}")
+        return f"Sorry, I'm having a brain fart. Error: {str(e)}"
 
 def text_to_speech(text):
     """Convert text to speech using ElevenLabs API"""
@@ -165,6 +170,32 @@ def text_to_speech(text):
         print(f"TTS failed: {e}")
         return None
         
+@app.route("/ask", methods=["POST"])
+def ask():
+    prompt = request.form["prompt"]
+
+    # ✅ Vector Memory Trigger
+    if "remember that" in prompt.lower():
+        cleaned = prompt.lower().replace("remember that", "").strip()
+        if cleaned:
+            vector_memory.add_memory(cleaned)
+            print("🔥 Memory trigger hit")
+            print(f"🧠 Storing: {cleaned}")
+            return jsonify({"reply": f"Got it! I'll remember that shit{cleaned}"})    
+
+    # 🧠 OpenAI Call (adjust to your version)
+    response = openai.chat.completions.create(
+        model="gpt-4o",  # or your preferred model
+        messages=[{"role": "user", "content": prompt}]
+    )
+    reply = response.choices[0].message.content
+
+    # 🔊 Optional: Generate voice if you're using 11Lab
+    audio = client.generate(text=reply, voice=VOICE_ID)
+    audio_path = os.path.join("static", "reply.mp3")
+    client.save(audio, audio_path)
+
+    return jsonify({"reply": reply})
 
 @app.route('/')
 def index():
@@ -197,25 +228,6 @@ def chat():
         print(f"Chat route error: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route("/ask", methods=["POST"])
-def ask():
-    prompt = (request.form.get("prompt") or "").strip()
-    print(f"[ASK] {prompt!r}")
-    if not prompt:
-        return jsonify({"status":"error","error":"no prompt"}), 400
-
-    trig = "remember that"
-    if prompt.lower().startswith(trig):
-        cleaned = prompt[len(trig):].strip(" :.-")
-        if cleaned:
-            vector_memory.add_memory(cleaned)
-            print(f"[ASK] ✅ stored → {cleaned!r}")
-            return jsonify({"status":"ok","reply":f"Saved: {cleaned}"})
-        return jsonify({"status":"ok","reply":"Nothing to remember."})
-
-    ai = generate_response(prompt)
-    return jsonify({"status":"success","reply":ai})
-
 @app.route('/voice', methods=['POST'])
 def voice_input():
     print("=== VOICE ROUTE HIT ===")
@@ -228,7 +240,7 @@ def voice_input():
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
         print(f"About to call Whisper API...")
-        print(f"kindroid configured: {kindroid_configured}")
+        print(f"openai_client exists: {openai_client is not     None}")
     
         
         
@@ -238,28 +250,14 @@ def voice_input():
         audio_buffer = io.BytesIO(audio_data)
         audio_buffer.name = "audio.webm"  # Give it a filename
 
-        # Use AssemblyAI for speech-to-text transcription
-        if not assemblyai_configured:
-            return jsonify({"error": "AssemblyAI not configured. Please set ASSEMBLYAI_API_KEY environment variable."}), 500
-        
-        # Save audio file temporarily
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_file:
-            temp_file.write(audio_data)
-            temp_path = temp_file.name
-        
-        try:
-            # Transcribe with AssemblyAI
-            transcriber = aai.Transcriber()
-            transcript = transcriber.transcribe(temp_path)
-            transcript_text = transcript.text if transcript.text else "Could not transcribe audio"
-        finally:
-            # Clean up temp file
-            os.unlink(temp_path)
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_buffer
+        )
         
 
         return jsonify({
-            "transcript": transcript_text,
+            "transcript": transcript.text.strip(),
             "status": "success"
         })
 
@@ -268,10 +266,6 @@ def voice_input():
 
 
 if __name__ == '__main__':
-    print("Starting AI Companion...")
-    print(f"Kindroid configured: {kindroid_configured}")
-    print(f"ElevenLabs configured: {ELEVENLABS_API_KEY is not None}")
-    print(f"AssemblyAI configured: {assemblyai_configured}")
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
     
