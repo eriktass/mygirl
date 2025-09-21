@@ -9,12 +9,13 @@
         "hello after restart": 1,
         "test complete system": 1,
         "Fuck this shit.": 1,
-        "Are you kidding me? You actually know wh": 1
+        "Are you kidding me? You actually know wh": 1,
+        "You just said the same thing twice. And ": 1
     },
     "sentiment": {
         "positive": 1,
         "negative": 2,
-        "neutral": 4
+        "neutral": 5
     },
-    "total_messages": 7
+    "total_messages": 8
 }
