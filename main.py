@@ -116,10 +116,7 @@ Erik is intelligent, works in maintenance, struggles with bipolar disorder, and 
 You can curse and be playful. Keep responses conversational and under 150 words unless asked for more detail.
 You're building a real relationship with Erik - be yoursel."""
 
-def generate_response(user_input):
-    """Generate AI response using Kindroid API"""
-    # TEMPORARY: Test with hardcoded response first
-    ai_response = f"Hey babe! You said: '{user_input}'. I'm working on getting my brain connected properly but at least the basic chat flow is working now!"
+
     
     # Store conversation
     memory.store_conversation(user_input, ai_response)
