@@ -11,16 +11,17 @@ from dotenv import load_dotenv
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 import assemblyai as aai
-import openai
-from elevenlabs import client
+from openai import OpenAI
 load_dotenv()
 
 app = Flask(__name__)
 
 vector_memory = VectorMemory()
+personality_engine = PersonalityEngine(vector_memory=vector_memory)
 # Configuration - PROPER environment variables
 KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  
 KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
 VOICE_ID = os.getenv("VOICE_ID")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")   
@@ -28,6 +29,14 @@ ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 # Initialize Kindroid API configuration
 KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
 kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
+
+# Initialize OpenAI client
+if OPENAI_API_KEY:
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    openai_configured = True
+else:
+    openai_client = None
+    openai_configured = False
 
 # Initialize AssemblyAI configuration
 if ASSEMBLYAI_API_KEY:
@@ -191,30 +200,45 @@ def text_to_speech(text):
         
 @app.route("/ask", methods=["POST"])
 def ask():
-    prompt = request.form["prompt"]
+    """Enhanced ask route with personality engine and automatic vector memory integration"""
+    try:
+        prompt = request.form["prompt"]
+        print(f"🔥 Ask route hit with prompt: {prompt}")
 
-    # ✅ Vector Memory Trigger
-    if "remember that" in prompt.lower():
-        cleaned = prompt.lower().replace("remember that", "").strip()
-        if cleaned:
-            vector_memory.add_memory(cleaned)
-            print("🔥 Memory trigger hit")
-            print(f"🧠 Storing: {cleaned}")
-            return jsonify({"reply": f"Got it! I'll remember that shit{cleaned}"})    
+        # Process conversation through personality engine (automatic memory extraction)
+        personality_engine.process_conversation(prompt)
+        
+        # Generate enhanced prompt with semantic context from vector memory
+        base_personality_prompt = build_personality_prompt()
+        enhanced_prompt = personality_engine.generate_enhanced_prompt(prompt, base_personality_prompt)
+        
+        print(f"🧠 Enhanced prompt generated with semantic context")
+        
+        # Use OpenAI with enhanced prompt that includes semantic memory context
+        if not openai_configured:
+            return jsonify({"error": "OpenAI not configured. Please set OPENAI_API_KEY environment variable."}), 500
+            
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": enhanced_prompt}]
+        )
+        reply = response.choices[0].message.content
 
-    # 🧠 OpenAI Call (adjust to your version)
-    response = openai.chat.completions.create(
-        model="gpt-4o",  # or your preferred model
-        messages=[{"role": "user", "content": prompt}]
-    )
-    reply = response.choices[0].message.content
+        # 🔊 Generate voice if ElevenLabs is configured - use existing REST API function
+        try:
+            if ELEVENLABS_API_KEY and VOICE_ID:
+                audio_response = text_to_speech(reply)
+                if audio_response:
+                    print("🔊 Audio generated successfully")
+        except Exception as audio_error:
+            print(f"Audio generation failed: {audio_error}")
+            # Continue without audio - don't fail the whole request
 
-    # 🔊 Optional: Generate voice if you're using 11Lab
-    audio = client.generate(text=reply, voice=VOICE_ID)
-    audio_path = os.path.join("static", "reply.mp3")
-    client.save(audio, audio_path)
-
-    return jsonify({"reply": reply})
+        return jsonify({"reply": reply})
+        
+    except Exception as e:
+        print(f"❌ Ask route error: {e}")
+        return jsonify({"error": f"Sorry babe, I'm having a brain fart. Error: {str(e)}"}), 500
 
 @app.route('/')
 def index():

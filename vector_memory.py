@@ -4,7 +4,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 class VectorMemory:
-    def __init__(self, memory_file="data/vector_mem.json"):
+    def __init__(self, memory_file="data/vector_memory.json"):
         self.memory_file = memory_file
         self.entries = self.load_memory()
 
@@ -25,6 +25,10 @@ class VectorMemory:
         self.save_memory()
 
     def find_similar(self, query, top_n=3):
+        # Handle edge case: no stored entries
+        if not self.entries:
+            return []
+            
         all_text = self.entries + [query]
         vectorizer = TfidfVectorizer()
         vectors = vectorizer.fit_transform(all_text)

@@ -18,3 +18,10 @@ flask
 elevenlabs==2.1
 
 assemblyai
+assemblyai
+flask
+openai
+python-dotenv
+requests
+scikit-learn
+textblob
