@@ -21,7 +21,7 @@ personality_engine = PersonalityEngine(vector_memory=vector_memory)
 # Configuration - PROPER environment variables
 KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  
 KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# OPENAI_API_KEY removed per user request
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
 VOICE_ID = os.getenv("VOICE_ID")
 ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")   
