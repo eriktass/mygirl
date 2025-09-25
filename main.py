@@ -138,7 +138,7 @@ def generate_response(user_input):
             f"{KINDROID_BASE_URL}/send-message", 
             headers=headers, 
             json=payload,
-            timeout=120
+            timeout=30
         )
         
         if response.status_code != 200:
@@ -180,7 +180,7 @@ def text_to_speech(text):
             }
         }
 
-        response = requests.post(url, json=data, headers=headers)
+        response = requests.post(url, json=data, headers=headers, timeout=10)
 
         if response.status_code == 200:
             return base64.b64encode(response.content).decode('utf-8')
@@ -241,7 +241,12 @@ def chat():
         ai_response = generate_response(user_input)
 
         # Generate TTS audio
-        audio_response = text_to_speech(ai_response)
+        audio_response = None
+        try:
+            audio_response = text_to_speech(ai_response)
+        except Exception as tts_error:
+            print(f"TTS failed: {tts_error}")
+            # Continue without audio - don't fail the whole request
 
         return jsonify({
             "user_message": user_input,
