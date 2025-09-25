@@ -259,17 +259,64 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // Play audio response
+        // Play audio response with autoplay policy handling
         function playAudio(audioBase64) {
             try {
                 const audio = new Audio();
                 audio.src = 'data:audio/mpeg;base64,' + audioBase64;
-                audio.play().catch(error => {
-                    console.log('Audio playback failed:', error);
-                });
+                
+                // Add loading/error handlers
+                audio.onloadstart = () => console.log('Audio loading...');
+                audio.oncanplay = () => console.log('Audio ready to play');
+                audio.onerror = (e) => {
+                    console.error('Audio error:', e);
+                    showError('Audio playback failed');
+                };
+                
+                // Try to play with proper error handling
+                const playPromise = audio.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            console.log('Audio playing successfully');
+                            showToast('🔊 Playing voice response');
+                        })
+                        .catch(error => {
+                            console.error('Audio playback failed:', error);
+                            if (error.name === 'NotAllowedError') {
+                                showToast('🔇 Click to enable audio playback');
+                                // Create clickable audio button
+                                addAudioButton(audioBase64);
+                            } else {
+                                showError('Audio playback failed: ' + error.message);
+                            }
+                        });
+                }
             } catch (error) {
-                console.log('Audio creation error:', error);
+                console.error('Audio creation error:', error);
+                showError('Audio creation failed: ' + error.message);
             }
+        }
+        
+        // Add clickable audio button when autoplay is blocked
+        function addAudioButton(audioBase64) {
+            const audioButton = document.createElement('button');
+            audioButton.textContent = '🔊 Play Voice Response';
+            audioButton.className = 'send-button';
+            audioButton.style.margin = '5px';
+            audioButton.onclick = () => {
+                const audio = new Audio();
+                audio.src = 'data:audio/mpeg;base64,' + audioBase64;
+                audio.play();
+                audioButton.remove();
+            };
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai-message';
+            messageDiv.appendChild(audioButton);
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         // Update status message
