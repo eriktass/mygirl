@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 import assemblyai as aai
-from openai import OpenAI
+# OpenAI removed per user request
 load_dotenv()
 
 app = Flask(__name__)
@@ -30,13 +30,7 @@ ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
 kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
 
-# Initialize OpenAI client
-if OPENAI_API_KEY:
-    openai_client = OpenAI(api_key=OPENAI_API_KEY)
-    openai_configured = True
-else:
-    openai_client = None
-    openai_configured = False
+# OpenAI removed per user request
 
 # Initialize AssemblyAI configuration
 if ASSEMBLYAI_API_KEY:
@@ -200,7 +194,7 @@ def text_to_speech(text):
         
 @app.route("/ask", methods=["POST"])
 def ask():
-    """Enhanced ask route with personality engine and automatic vector memory integration"""
+    """Enhanced ask route with personality engine and automatic vector memory integration using Kindroid"""
     try:
         prompt = request.form["prompt"]
         print(f"🔥 Ask route hit with prompt: {prompt}")
@@ -208,33 +202,22 @@ def ask():
         # Process conversation through personality engine (automatic memory extraction)
         personality_engine.process_conversation(prompt)
         
-        # Generate enhanced prompt with semantic context from vector memory
-        base_personality_prompt = build_personality_prompt()
-        enhanced_prompt = personality_engine.generate_enhanced_prompt(prompt, base_personality_prompt)
+        # Generate enhanced response using Kindroid with semantic context
+        ai_response = generate_response(prompt)
         
-        print(f"🧠 Enhanced prompt generated with semantic context")
-        
-        # Use OpenAI with enhanced prompt that includes semantic memory context
-        if not openai_configured:
-            return jsonify({"error": "OpenAI not configured. Please set OPENAI_API_KEY environment variable."}), 500
-            
-        response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": enhanced_prompt}]
-        )
-        reply = response.choices[0].message.content
+        print(f"🧠 Generated Kindroid response with vector memory context")
 
-        # 🔊 Generate voice if ElevenLabs is configured - use existing REST API function
+        # 🔊 Generate voice if ElevenLabs is configured
         try:
             if ELEVENLABS_API_KEY and VOICE_ID:
-                audio_response = text_to_speech(reply)
+                audio_response = text_to_speech(ai_response)
                 if audio_response:
                     print("🔊 Audio generated successfully")
         except Exception as audio_error:
             print(f"Audio generation failed: {audio_error}")
             # Continue without audio - don't fail the whole request
 
-        return jsonify({"reply": reply})
+        return jsonify({"reply": ai_response})
         
     except Exception as e:
         print(f"❌ Ask route error: {e}")
