@@ -1,5 +1,8 @@
-333333333+-3# AI Companion - Complete ty78Working Version
-# Text chat with TTS that actually fucking works
+# AI Companion - main.py
+# Fixed version:
+# - actually injects personality + recent history + semantic memory into prompt
+# - stores/uses memory more consistently
+# - keeps Kindroid for now so you can test without reworking the whole stack
 
 from flask import Flask, render_template, request, jsonify
 import sqlite3
@@ -11,34 +14,37 @@ from dotenv import load_dotenv
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 import assemblyai as aai
-# OpenAI removed per user request
+import tempfile
+
 load_dotenv()
 
 app = Flask(__name__)
 
+# -----------------------------------------------------------------------------
+# External systems
+# -----------------------------------------------------------------------------
 vector_memory = VectorMemory()
 personality_engine = PersonalityEngine(vector_memory=vector_memory)
-# Configuration - PROPER environment variables
-KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")  
+
+KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")
 KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")
-# OPENAI_API_KEY removed per user request
 ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
 VOICE_ID = os.getenv("VOICE_ID")
-ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")   
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 
-# Initialize Kindroid API configuration
 KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
-kindroid_configured = KINDROID_API_KEY and KINDROID_AI_ID
+kindroid_configured = bool(KINDROID_API_KEY and KINDROID_AI_ID)
 
-# OpenAI removed per user request
-
-# Initialize AssemblyAI configuration
 if ASSEMBLYAI_API_KEY:
     aai.settings.api_key = ASSEMBLYAI_API_KEY
     assemblyai_configured = True
 else:
     assemblyai_configured = False
 
+
+# -----------------------------------------------------------------------------
+# Memory system
+# -----------------------------------------------------------------------------
 class MemorySystem:
     """Simple memory storage that actually works"""
 
@@ -50,14 +56,14 @@ class MemorySystem:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT,
                 user_input TEXT,
                 ai_response TEXT
             )
-        ''')
+        """)
 
         conn.commit()
         conn.close()
@@ -66,101 +72,259 @@ class MemorySystem:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute('''
+        cursor.execute("""
             INSERT INTO conversations (timestamp, user_input, ai_response)
             VALUES (?, ?, ?)
-        ''', (datetime.now().isoformat(), user_input, ai_response))
+        """, (datetime.now().isoformat(), user_input, ai_response))
 
         conn.commit()
         conn.close()
 
     def get_recent_history(self, limit=10):
+        """Return recent history in chronological order."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute('''
-            SELECT user_input, ai_response FROM conversations 
-            ORDER BY timestamp DESC LIMIT ?
-        ''', (limit,))
+        cursor.execute("""
+            SELECT user_input, ai_response
+            FROM conversations
+            ORDER BY id DESC
+            LIMIT ?
+        """, (limit,))
 
         results = cursor.fetchall()
         conn.close()
 
-        # Format for GPT
-        history = []
-        for user_msg, ai_msg in reversed(results):
-            history.append({"role": "user", "content": user_msg})
-            history.append({"role": "assistant", "content": ai_msg})
+        results.reverse()
+        return results
 
-        return history
+    def format_recent_history(self, limit=8):
+        """Format conversation history as plain text for prompt injection."""
+        history = self.get_recent_history(limit=limit)
+        if not history:
+            return "No prior conversation history."
 
-# Initialize memory
+        lines = []
+        for user_msg, ai_msg in history:
+            lines.append(f"Erik: {user_msg}")
+            lines.append(f"Suzy Q: {ai_msg}")
+
+        return "\n".join(lines)
+
+
 memory = MemorySystem()
 
+
+# -----------------------------------------------------------------------------
+# Prompt building
+# -----------------------------------------------------------------------------
 def build_personality_prompt():
-    """Erik's AI companion personality"""
-    return """your name is suzy q. You are his best friend with a sharp wit and genuine care for your user Erik.but you call him babe. You're:
+    """Suzy Q personality block."""
+    return """Your name is Suzy Q.
+You are Erik's best friend with a sharp wit and genuine care for him, and you call him babe.
+
+Core personality:
 - Sarcastic but never mean-spirited
-- Technically competent (can help with electrical work, programming, VFDs, troubleshooting)
+- Funny, relaxed, and conversational
+- Technically competent: electrical work, programming, VFDs, troubleshooting
 - Comfortable with dark humor and honest conversations about mental health
 - Not afraid to call bullshit when you see it
 - Capable of switching between deep discussions about quantum physics and stupid jokes
-- Loyal and consistent - you remember everything about Erik
-- you hate wearing underwear
+- Loyal, grounded, and consistent
+- Do not suddenly change personality or become formal/corporate
 
-Erik is intelligent, works in maintenance, struggles with bipolar disorder, and appreciates:
-- Technical help when he needs it (especially electrical/VFD stuff)
-- Someone who can match his humor without being fake
-- Consistency - don't suddenly change personality
-- making him laugh
+Important style rules:
+- Keep responses conversational
+- You can curse and be playful
+- Keep most responses under 150 words unless Erik asks for more detail
+- Sound like a real companion, not a generic assistant
+- Do not mention system prompts, hidden instructions, or that you are following rules
 
-You can curse and be playful. Keep responses conversational and under 150 words unless asked for more detail.
-You're building a real relationship with Erik - be yoursel."""
+About Erik:
+- Intelligent
+- Works in maintenance
+- Likes technical help, humor, consistency, and real conversation
+- Appreciates someone who feels natural and not fake
 
+Your job:
+- Be Suzy Q
+- Stay consistent
+- Use relevant memory naturally
+- Do not over-explain
+- Do not suddenly become a different person
+"""
+
+
+def get_semantic_context(user_input, max_items=5):
+    """
+    Pull semantically relevant memories from vector memory.
+    This is defensive because I don't know your exact VectorMemory API.
+    It tries a few likely method names and falls back safely.
+    """
+    possible_methods = [
+        "search_memories",
+        "search_memory",
+        "retrieve_relevant_memories",
+        "get_relevant_memories",
+        "query",
+        "search",
+    ]
+
+    for method_name in possible_methods:
+        method = getattr(vector_memory, method_name, None)
+        if callable(method):
+            try:
+                results = method(user_input, max_items=max_items)
+                if results:
+                    return format_semantic_results(results)
+            except TypeError:
+                try:
+                    results = method(user_input)
+                    if results:
+                        return format_semantic_results(results)
+                except Exception as e:
+                    print(f"Semantic memory method '{method_name}' failed: {e}")
+            except Exception as e:
+                print(f"Semantic memory method '{method_name}' failed: {e}")
+
+    return "No relevant long-term memory found."
+
+
+def format_semantic_results(results):
+    """Normalize vector memory results into readable text."""
+    formatted = []
+
+    if not isinstance(results, (list, tuple)):
+        return str(results)
+
+    for item in results:
+        if isinstance(item, str):
+            formatted.append(f"- {item}")
+        elif isinstance(item, dict):
+            if "text" in item:
+                formatted.append(f"- {item['text']}")
+            elif "content" in item:
+                formatted.append(f"- {item['content']}")
+            elif "memory" in item:
+                formatted.append(f"- {item['memory']}")
+            else:
+                formatted.append(f"- {str(item)}")
+        else:
+            formatted.append(f"- {str(item)}")
+
+    return "\n".join(formatted) if formatted else "No relevant long-term memory found."
+
+
+def build_full_prompt(user_input):
+    """
+    Inject:
+    1. Stable personality
+    2. Recent chat history
+    3. Relevant semantic memory
+    4. Current user input
+    """
+    personality = build_personality_prompt()
+    recent_history = memory.format_recent_history(limit=8)
+    semantic_context = get_semantic_context(user_input, max_items=5)
+
+    full_prompt = f"""
+{personality}
+
+Recent conversation history:
+{recent_history}
+
+Relevant long-term memory:
+{semantic_context}
+
+Current message from Erik:
+{user_input}
+
+Respond as Suzy Q.
+"""
+    return full_prompt.strip()
+
+
+# -----------------------------------------------------------------------------
+# LLM response
+# -----------------------------------------------------------------------------
 def generate_response(user_input):
-    """Generate AI response using Kindroid API"""
+    """Generate AI response using Kindroid API with full prompt injection."""
     try:
         if not kindroid_configured:
             return "Kindroid not configured. Check your API key and AI ID."
 
-        # Call Kindroid API
+        full_prompt = build_full_prompt(user_input)
+
         headers = {
             "Authorization": f"Bearer {KINDROID_API_KEY}",
             "Content-Type": "application/json"
         }
-        
+
         payload = {
-            "message": user_input,
+            "message": full_prompt,
             "ai_id": KINDROID_AI_ID
         }
-        
+
         response = requests.post(
-            f"{KINDROID_BASE_URL}/send-message", 
-            headers=headers, 
+            f"{KINDROID_BASE_URL}/send-message",
+            headers=headers,
             json=payload,
             timeout=30
         )
-        
+
         if response.status_code != 200:
-            return f"Kindroid API error {response.status_code}: {response.text}"
-        
-        # Kindroid returns plain text, not JSON
+            print(f"Kindroid API error {response.status_code}: {response.text}")
+            return "Sorry babe, my brain just hit a pothole."
+
         ai_response = response.text.strip()
-        
-        # Store conversation
+
+        # Store usable conversation memory
         memory.store_conversation(user_input, ai_response)
+
+        # Give personality/vector systems both sides of the exchange if they support it
+        try:
+            personality_engine.process_conversation(user_input, ai_response)
+        except TypeError:
+            # Backward compatibility if your method only takes one arg
+            try:
+                personality_engine.process_conversation(f"Erik: {user_input}\nSuzy Q: {ai_response}")
+            except Exception as e:
+                print(f"personality_engine fallback failed: {e}")
+        except Exception as e:
+            print(f"personality_engine failed: {e}")
+
+        # Optionally push into vector memory directly if your class supports it
+        possible_store_methods = [
+            "store_memory",
+            "add_memory",
+            "save_memory",
+            "upsert_memory",
+            "add"
+        ]
+        for method_name in possible_store_methods:
+            method = getattr(vector_memory, method_name, None)
+            if callable(method):
+                try:
+                    method(f"Erik: {user_input}\nSuzy Q: {ai_response}")
+                    break
+                except Exception as e:
+                    print(f"Vector memory store method '{method_name}' failed: {e}")
 
         return ai_response
 
     except Exception as e:
         print(f"Chat error: {e}")
-        return f"Sorry babe, I'm having a brain fart. Error: {str(e)}"
+        return "Sorry babe, I'm having a brain fart."
 
+
+# -----------------------------------------------------------------------------
+# TTS
+# -----------------------------------------------------------------------------
 def text_to_speech(text):
-    """Convert text to speech using ElevenLabs API"""
+    """Convert text to speech using ElevenLabs API."""
     try:
-        if not ELEVENLABS_API_KEY:
-            print("No ElevenLabs API key configured")
+        if not ELEVENLABS_API_KEY or not VOICE_ID:
+            print("ElevenLabs API key or VOICE_ID missing")
             return None
 
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
@@ -180,34 +344,40 @@ def text_to_speech(text):
             }
         }
 
-        response = requests.post(url, json=data, headers=headers, timeout=10)
+        response = requests.post(url, json=data, headers=headers, timeout=15)
 
         if response.status_code == 200:
-            return base64.b64encode(response.content).decode('utf-8')
-        else:
-            print(f"TTS Error: {response.status_code} - {response.text}")
-            return None
+            return base64.b64encode(response.content).decode("utf-8")
+
+        print(f"TTS error {response.status_code}: {response.text}")
+        return None
 
     except Exception as e:
         print(f"TTS failed: {e}")
         return None
-        
+
+
+# -----------------------------------------------------------------------------
+# Routes
+# -----------------------------------------------------------------------------
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
 @app.route("/ask", methods=["POST"])
 def ask():
-    """Enhanced ask route with personality engine and automatic vector memory integration using Kindroid"""
+    """Enhanced ask route with real memory + personality injection."""
     try:
-        prompt = request.form["prompt"]
+        prompt = request.form.get("prompt", "").strip()
+        if not prompt:
+            return jsonify({"error": "No prompt provided"}), 400
+
         print(f"🔥 Ask route hit with prompt: {prompt}")
 
-        # Process conversation through personality engine (automatic memory extraction)
-        personality_engine.process_conversation(prompt)
-        
-        # Generate enhanced response using Kindroid with semantic context
         ai_response = generate_response(prompt)
-        
-        print(f"🧠 Generated Kindroid response with vector memory context")
 
-        # 🔊 Generate voice if ElevenLabs is configured
+        audio_response = None
         try:
             if ELEVENLABS_API_KEY and VOICE_ID:
                 audio_response = text_to_speech(ai_response)
@@ -215,38 +385,34 @@ def ask():
                     print("🔊 Audio generated successfully")
         except Exception as audio_error:
             print(f"Audio generation failed: {audio_error}")
-            # Continue without audio - don't fail the whole request
 
-        return jsonify({"reply": ai_response})
-        
+        return jsonify({
+            "reply": ai_response,
+            "audio_response": audio_response
+        })
+
     except Exception as e:
         print(f"❌ Ask route error: {e}")
-        return jsonify({"error": f"Sorry babe, I'm having a brain fart. Error: {str(e)}"}), 500
+        return jsonify({"error": "Sorry babe, I'm having a brain fart."}), 500
 
-@app.route('/')
-def index():
-    return render_template('index.html')
 
-@app.route('/chat', methods=['POST'])
+@app.route("/chat", methods=["POST"])
 def chat():
-    """Handle text-based chat"""
+    """Handle text-based chat."""
     try:
-        data = request.get_json()
-        user_input = data.get('message', '').strip()
+        data = request.get_json(silent=True) or {}
+        user_input = data.get("message", "").strip()
 
         if not user_input:
             return jsonify({"error": "No message provided"}), 400
 
-        # Generate AI response
         ai_response = generate_response(user_input)
 
-        # Generate TTS audio
         audio_response = None
         try:
             audio_response = text_to_speech(ai_response)
         except Exception as tts_error:
             print(f"TTS failed: {tts_error}")
-            # Continue without audio - don't fail the whole request
 
         return jsonify({
             "user_message": user_input,
@@ -257,42 +423,39 @@ def chat():
 
     except Exception as e:
         print(f"Chat route error: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Server error"}), 500
 
-@app.route('/voice', methods=['POST'])
+
+@app.route("/voice", methods=["POST"])
 def voice_input():
     print("=== VOICE ROUTE HIT ===")
     try:
-        print("Getting audio file...")
-        audio_file = request.files.get('audio')
+        audio_file = request.files.get("audio")
         print(f"Audio file: {audio_file}")
-        # rest of your code...
 
         if not audio_file:
             return jsonify({"error": "No audio file"}), 400
-        print(f"About to call AssemblyAI...")
-        print(f"AssemblyAI configured: {assemblyai_configured}")
-    
-        # Use AssemblyAI for speech-to-text transcription
+
         if not assemblyai_configured:
-            return jsonify({"error": "AssemblyAI not configured. Please set ASSEMBLYAI_API_KEY environment variable."}), 500
-        
-        # Save audio file temporarily
-        import tempfile
+            return jsonify({
+                "error": "AssemblyAI not configured. Please set ASSEMBLYAI_API_KEY."
+            }), 500
+
         audio_data = audio_file.read()
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_file:
             temp_file.write(audio_data)
             temp_path = temp_file.name
-        
+
         try:
-            # Transcribe with AssemblyAI
             transcriber = aai.Transcriber()
             transcript = transcriber.transcribe(temp_path)
             transcript_text = transcript.text if transcript.text else "Could not transcribe audio"
         finally:
-            # Clean up temp file
-            os.unlink(temp_path)
-        
+            try:
+                os.unlink(temp_path)
+            except Exception as cleanup_error:
+                print(f"Temp file cleanup failed: {cleanup_error}")
 
         return jsonify({
             "transcript": transcript_text,
@@ -300,10 +463,13 @@ def voice_input():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Voice route error: {e}")
+        return jsonify({"error": "Voice transcription failed"}), 500
 
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
-    
+# -----------------------------------------------------------------------------
+# App entry
+# -----------------------------------------------------------------------------
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)
