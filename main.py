@@ -13,6 +13,7 @@
 
             return jsonify({'message': message, 'audio_response': audio_response})
         except Exception as e:
+            print(f"Chat route error: {e}")
             return jsonify({'error': str(e)}), 500
 
      
