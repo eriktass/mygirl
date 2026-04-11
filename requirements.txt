@@ -10,3 +10,4 @@ textblob
 scikit-learn
 elevenlabs==2.1
 assemblyai
+google-cloud-texttospeech
