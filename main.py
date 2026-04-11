@@ -314,7 +314,7 @@ def generate_response(user_input):
         print(f"Chat error: {e}")
         return "Sorry babe, I'm having a brain fart."
 
-
+        print(f"PROMPT LENGTH: {len(full_prompt)}")
 # -----------------------------------------------------------------------------
 # TTS
 # -----------------------------------------------------------------------------
