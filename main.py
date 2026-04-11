@@ -16,23 +16,24 @@
             return jsonify({'error': str(e)}), 500
 
      
-            print("=== /chat start ===")
-            print(f"user_input length: {len(user_input)}")
 
-            ai_response = generate_response(user_input)
-            print("=== generate_response returned ===")
-            print(f"ai_response length: {len(ai_response) if ai_response else 0}")
+               print("=== /chat start ===")
+        print(f"user_input length: {len(user_input)}")
 
-                audio_response = None
+        ai_response = generate_response(user_input)
+        print("=== generate_response returned ===")
+        print(f"ai_response length: {len(ai_response) if ai_response else 0}")
+
+        audio_response = None
         try:
             audio_response = text_to_speech(ai_response)
-                print("=== text_to_speech returned ===")
-                print(f"audio_response exists: {audio_response is not None}")
-                print(f"audio_response length: {len(audio_response) if audio_response else 0}")
+            print("=== text_to_speech returned ===")
+            print(f"audio_response exists: {audio_response is not None}")
+            print(f"audio_response length: {len(audio_response) if audio_response else 0}")
         except Exception as tts_error:
-                print("=== TTS exception ===")
-        import traceback
+            print("=== TTS exception ===")
+            import traceback
             traceback.print_exc()
             print(tts_error)
 
-        1    print("=== about to jsonify /chat ===")
+            print("=== about to jsonify /chat ===")
