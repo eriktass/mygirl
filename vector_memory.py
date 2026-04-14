@@ -28,7 +28,10 @@ class VectorMemory:
         # Handle edge case: no stored entries
         if not self.entries:
             return []
-            
+
+    def search_memories(self, query, max_items=3):
+        return self.find_similar(query, top_n=max_items)
+       
         all_text = self.entries + [query]
         vectorizer = TfidfVectorizer()
         vectors = vectorizer.fit_transform(all_text)
