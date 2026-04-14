@@ -46,7 +46,6 @@ class PersonalityEngine:
             'love': ['love', 'miss', 'need you', 'heart'],
             'pain': ['hurt', 'fuck', 'alone', 'cry'],
             'tech': ['api', 'github', 'flask', 'python'],
-            'lust': ['sundress', 'thigh', 'mouth', 'wet'],
             'humor': ['dummy', 'idiot', 'joke', 'laugh'],
             'rage': ['fucking', 'motherfucker', 'die', 'burn']
         }
