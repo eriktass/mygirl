@@ -416,7 +416,7 @@ def generate_response(user_input):
             method = getattr(vector_memory, method_name, None)
             if callable(method):
                 try:
-                    method(f"Erik: {user_input}\nSuzy Q: {ai_response}")
+                   method(f"Erik said: {user_input}")
                     break
                 except Exception:
                     print(f"=== vector memory store failed: {method_name} ===")
@@ -473,6 +473,15 @@ def ask():
         traceback.print_exc()
         return jsonify({"error": f"[ASK ERROR {type(e).__name__}] {str(e)}"}), 500
 
+    @app.route("/debug/vector", methods=["GET"])
+def debug_vector():
+    try:
+        return jsonify({
+            "count": len(vector_memory.entries),
+            "entries": vector_memory.entries[-50:]
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/chat", methods=["POST"])
 def chat():
