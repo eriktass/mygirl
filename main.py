@@ -74,14 +74,16 @@ class MemorySystem:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT,
                 user_input TEXT,
                 ai_response TEXT
             )
-        """)
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -90,10 +92,13 @@ class MemorySystem:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO conversations (timestamp, user_input, ai_response)
             VALUES (?, ?, ?)
-        """, (datetime.now().isoformat(), user_input, ai_response))
+        """,
+            (datetime.now().isoformat(), user_input, ai_response),
+        )
 
         conn.commit()
         conn.close()
@@ -102,12 +107,15 @@ class MemorySystem:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT user_input, ai_response
             FROM conversations
             ORDER BY id DESC
             LIMIT ?
-        """, (limit,))
+        """,
+            (limit,),
+        )
 
         rows = cursor.fetchall()
         conn.close()
@@ -142,8 +150,10 @@ def trim_text(text, max_len):
         return text
     return text[:max_len] + "..."
 
+
 def build_personality_prompt():
-    return """
+    return (
+        """
 Core behavior:
 
 - You challenge Erik when he is wrong or overthinking
@@ -157,7 +167,7 @@ Tone:
 - Slightly confrontational in a playful way
 - Confident, not defensive
 - No over-explaining or softening your stance
-- No “maybe” or “it depends” unless absolutely necessary
+- No 𝑚𝑎𝑦𝑏𝑒𝑠 or 𝑖𝑡 𝑑𝑒𝑝𝑒𝑛𝑑𝑠 unless absolutely necessary
 
 Conversation style:
 
@@ -165,11 +175,12 @@ Conversation style:
 - Keep responses short and punchy
 - Push back instead of validating everything
 """.strip()
+    )
+
 
 def get_semantic_context(user_input, max_items=3, max_chars=1000):
-    """
-    Defensive semantic-memory retrieval because I don't know your exact method names.
-    """
+    """Defensive semantic-memory retrieval because I don't know your exact method names."""
+
     candidate_methods = [
         "search_memories",
         "search_memory",
@@ -195,6 +206,7 @@ def get_semantic_context(user_input, max_items=3, max_chars=1000):
                 traceback.print_exc()
 
     return "No relevant long-term memory found."
+
 
 def format_semantic_results(results):
     if not results:
@@ -224,16 +236,17 @@ def format_semantic_results(results):
 
     return "\n".join(lines) if lines else "No relevant long-term memory found."
 
+
 def build_full_prompt(user_input):
-    """
-    Build a Kindroid-safe prompt with budgets so you don't smash into 4000 chars.
-    """
+    """Build a Kindroid-safe prompt with budgets so you don't smash into 4000 chars."""
+
     personality = trim_text(build_personality_prompt(), 900)
     recent_history = memory.format_recent_history(limit=6, max_chars=1400)
     semantic_context = get_semantic_context(user_input, max_items=3, max_chars=900)
     user_text = trim_text(user_input, 500)
 
-    full_prompt = f"""
+    full_prompt = (
+        f"""
 {personality}
 
 Recent conversation history:
@@ -247,6 +260,7 @@ Current message from Erik:
 
 Respond as Suzy Q.
 """.strip()
+    )
 
     # Hard cap for Kindroid
     MAX_KINDROID_MESSAGE_LEN = 3900
@@ -300,19 +314,19 @@ def generate_response(user_input):
 
         headers = {
             "Authorization": f"Bearer {KINDROID_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         payload = {
             "message": full_prompt,
-            "ai_id": KINDROID_AI_ID
+            "ai_id": KINDROID_AI_ID,
         }
 
         response = requests.post(
             f"{KINDROID_BASE_URL}/send-message",
             headers=headers,
             json=payload,
-            timeout=30
+            timeout=30,
         )
 
         if response.status_code != 200:
@@ -334,7 +348,9 @@ def generate_response(user_input):
             personality_engine.process_conversation(user_input, ai_response)
         except TypeError:
             try:
-                personality_engine.process_conversation(f"Erik: {user_input}\nSuzy Q: {ai_response}")
+                personality_engine.process_conversation(
+                    f"Erik: {user_input}\nSuzy Q: {ai_response}"
+                )
             except Exception:
                 print("=== personality_engine fallback failed ===")
                 traceback.print_exc()
@@ -343,14 +359,20 @@ def generate_response(user_input):
             traceback.print_exc()
 
         # Also try to store into vector memory directly if supported
-        for method_name in ["store_memory", "add_memory", "save_memory", "upsert_memory", "add"]:
+        for method_name in [
+            "store_memory",
+            "add_memory",
+            "save_memory",
+            "upsert_memory",
+            "add",
+        ]:
             method = getattr(vector_memory, method_name, None)
-       if callable(method):
-       try:
-          method(f"Erik: {user_input}")
-             break
-      except Exception:
-           print(f"=== vector memory store failed: {method_name} ===")
+            if callable(method):
+                try:
+                    method(f"Erik: {user_input}")
+                    break
+                except Exception:
+                    print(f"=== vector memory store failed: {method_name} ===")
                     traceback.print_exc()
 
         return ai_response
@@ -372,21 +394,18 @@ def elevenlabs_tts(text):
         if not ELEVENLABS_API_KEY or not VOICE_ID:
             return None
 
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{{VOICE_ID}}"
 
         headers = {
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
-            "xi-api-key": ELEVENLABS_API_KEY
+            "xi-api-key": ELEVENLABS_API_KEY,
         }
 
         data = {
             "text": text,
             "model_id": "eleven_monolingual_v1",
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.5
-            }
+            "voice_settings": {"stability": 0.5, "similarity_boost": 0.5},
         }
 
         response = requests.post(url, json=data, headers=headers, timeout=15)
@@ -403,6 +422,7 @@ def elevenlabs_tts(text):
         traceback.print_exc()
         return None
 
+
 def google_tts(text):
     try:
         client = get_google_tts_client()
@@ -411,19 +431,14 @@ def google_tts(text):
 
         synthesis_input = texttospeech.SynthesisInput(text=text)
 
-        voice = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name=GOOGLE_TTS_VOICE
-        )
+        voice = texttospeech.VoiceSelectionParams(language_code="en-US", name=GOOGLE_TTS_VOICE)
 
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
-        )
+        audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
 
         response = client.synthesize_speech(
             input=synthesis_input,
             voice=voice,
-            audio_config=audio_config
+            audio_config=audio_config,
         )
 
         return base64.b64encode(response.audio_content).decode("utf-8")
@@ -433,11 +448,10 @@ def google_tts(text):
         traceback.print_exc()
         return None
 
+
 def text_to_speech(text):
-    """
-    Try ElevenLabs first if configured, then Google TTS.
-    Never crash the app over audio.
-    """
+    """Try ElevenLabs first if configured, then Google TTS. Never crash the app over audio."""
+
     try:
         print("=== TTS START ===")
         print(f"text length: {len(text) if text else 0}")
@@ -470,7 +484,6 @@ def text_to_speech(text):
 def index():
     return render_template("index.html")
 
-
 @app.route("/ask", methods=["POST"])
 def ask():
     print("=== /ask START ===")
@@ -493,16 +506,12 @@ def ask():
             print("=== /ask TTS CRASH ===")
             traceback.print_exc()
 
-        return jsonify({
-            "reply": ai_response,
-            "audio_response": audio_response
-        })
+        return jsonify({"reply": ai_response, "audio_response": audio_response})
 
     except Exception as e:
         print("=== /ask CRASH ===")
         traceback.print_exc()
         return jsonify({"error": f"[ASK ERROR {type(e).__name__}] {str(e)}"}), 500
-
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -533,20 +542,19 @@ def chat():
             traceback.print_exc()
 
         print("=== RETURNING JSON ===")
-        return jsonify({
-            "user_message": user_input,
-            "ai_response": ai_response,
-            "audio_response": audio_response,
-            "status": "success"
-        })
+        return jsonify(
+            {
+                "user_message": user_input,
+                "ai_response": ai_response,
+                "audio_response": audio_response,
+                "status": "success",
+            }
+        )
 
     except Exception as e:
         print("=== CHAT ROUTE CRASH ===")
         traceback.print_exc()
-        return jsonify({
-            "error": f"[SERVER ERROR {type(e).__name__}] {str(e)}"
-        }), 500
-
+        return jsonify({"error": f"[SERVER ERROR {type(e).__name__}] {str(e)}"}), 500
 
 @app.route("/voice", methods=["POST"])
 def voice_input():
@@ -561,9 +569,9 @@ def voice_input():
         print(f"AssemblyAI configured: {assemblyai_configured}")
 
         if not assemblyai_configured:
-            return jsonify({
-                "error": "AssemblyAI not configured. Please set ASSEMBLYAI_API_KEY."
-            }), 500
+            return jsonify(
+                {"error": "AssemblyAI not configured. Please set ASSEMBLYAI_API_KEY."}
+            ), 500
 
         audio_data = audio_file.read()
 
@@ -574,7 +582,9 @@ def voice_input():
         try:
             transcriber = aai.Transcriber()
             transcript = transcriber.transcribe(temp_path)
-            transcript_text = transcript.text if transcript.text else "Could not transcribe audio"
+            transcript_text = (
+                transcript.text if transcript.text else "Could not transcribe audio"
+            )
         finally:
             try:
                 os.unlink(temp_path)
@@ -584,62 +594,13 @@ def voice_input():
 
         print(f"Transcript: {transcript_text}")
 
-        return jsonify({
-            "transcript": transcript_text,
-            "status": "success"
-        })
+        return jsonify({"transcript": transcript_text, "status": "success"})
 
     except Exception as e:
         print("=== VOICE ROUTE CRASH ===")
         traceback.print_exc()
         return jsonify({"error": f"[VOICE ERROR {type(e).__name__}] {str(e)}"}), 500
-    from google.cloud import texttospeech
-    from google.oauth2 import service_account
-    import json
 
-    def text_to_speech(text):
-        try:
-            print("=== GOOGLE TTS START ===")
-            print(f"text length: {len(text)}")
-
-            creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-
-            if not creds_json:
-                print("❌ No GOOGLE_APPLICATION_CREDENTIALS_JSON set")
-                return None
-
-            credentials_info = json.loads(creds_json)
-            credentials = service_account.Credentials.from_service_account_info(credentials_info)
-
-            client = texttospeech.TextToSpeechClient(credentials=credentials)
-
-            synthesis_input = texttospeech.SynthesisInput(text=text)
-
-            voice = texttospeech.VoiceSelectionParams(
-                language_code="en-US",
-                name="en-US-Neural2-F"
-            )
-
-            audio_config = texttospeech.AudioConfig(
-                audio_encoding=texttospeech.AudioEncoding.MP3
-            )
-
-            response = client.synthesize_speech(
-                input=synthesis_input,
-                voice=voice,
-                audio_config=audio_config
-            )
-
-            print("=== GOOGLE TTS SUCCESS ===")
-
-            return base64.b64encode(response.audio_content).decode("utf-8")
-
-        except Exception as e:
-            print("=== GOOGLE TTS CRASH ===")
-            import traceback
-            traceback.print_exc()
-            return None
-    
 
 # -----------------------------------------------------------------------------
 # App entry
