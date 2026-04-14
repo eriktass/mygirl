@@ -345,12 +345,12 @@ def generate_response(user_input):
         # Also try to store into vector memory directly if supported
         for method_name in ["store_memory", "add_memory", "save_memory", "upsert_memory", "add"]:
             method = getattr(vector_memory, method_name, None)
-            if callable(method):
-                try:
-                   method(f"Erik: {user_input}")
-                    break
-                except Exception:
-                    print(f"=== vector memory store failed: {method_name} ===")
+       if callable(method):
+       try:
+          method(f"Erik: {user_input}")
+             break
+      except Exception:
+           print(f"=== vector memory store failed: {method_name} ===")
                     traceback.print_exc()
 
         return ai_response
