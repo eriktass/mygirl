@@ -47,4 +47,4 @@ class VectorMemory:
         return [self.entries[i] for i in sorted_indices]
 
     def search_memories(self, query, max_items=3):
-        return self.find_similar(query, top_n=max_items) [self.entries[i] for i in sorted_indices]
+        return self.find_similar(query, top_n=max_items)
