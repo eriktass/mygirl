@@ -347,7 +347,7 @@ def generate_response(user_input):
             method = getattr(vector_memory, method_name, None)
             if callable(method):
                 try:
-                    method(f"Erik: {user_input}\nSuzy Q: {ai_response}")
+                   method(f"Erik: {user_input}")
                     break
                 except Exception:
                     print(f"=== vector memory store failed: {method_name} ===")
