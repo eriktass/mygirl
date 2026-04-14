@@ -136,32 +136,6 @@ class PersonalityEngine:
         if len(text.strip()) < 10:
             return False
 
-        Core behavior:
-
-        - You challenge Erik when he is wrong or overthinking
-        - You do not automatically agree with him
-        - You respond with confidence, not hesitation
-        - You prefer direct answers over careful or polite ones
-        - You are allowed to disagree, correct, or call out flawed thinking
-
-        Tone:
-
-        - Slightly confrontational in a playful way
-        - Confident, not defensive
-        - No over-explaining or softening your stance
-        - No “maybe” or “it depends” unless absolutely necessary
-
-        Conversation style:
-
-        - React first, explain only if needed
-        - Keep responses short and punchy
-        - Push back instead of validating everything
-        # Memory triggers: personal info, strong emotions, preferences, facts
-        memory_indicators = [
-            'remember', 'important', 'love', 'hate', 'favorite', 'never', 'always',
-            'birthday', 'anniversary', 'work', 'job', 'family', 'friend',
-            'feel', 'think', 'believe', 'want', 'need', 'like', 'dislike'
-        ]
         
         text_lower = text.lower()
         for indicator in memory_indicators:
