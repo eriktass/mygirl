@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+ffrom flask import Flask, render_template, request, jsonify
 import sqlite3
 import os
 import requests
@@ -8,11 +8,18 @@ import tempfile
 import traceback
 from datetime import datetime
 from dotenv import load_dotenv
+
 from vector_memory import VectorMemory
 from personality_engine import PersonalityEngine
 import assemblyai as aai
-from google.cloud import texttospeech
-from google.oauth2 import service_account
+
+# Optional Google TTS imports
+try:
+    from google.cloud import texttospeech
+    from google.oauth2 import service_account
+    google_tts_available = True
+except Exception:
+    google_tts_available = False
 
 load_dotenv()
 
@@ -29,18 +36,23 @@ personality_engine = PersonalityEngine(vector_memory=vector_memory)
 # -----------------------------------------------------------------------------
 KINDROID_API_KEY = os.getenv("KINDROID_API_KEY")
 KINDROID_AI_ID = os.getenv("KINDROID_AI_ID")
-ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
 
-# -----------------------------------------------------------------------------
-# Kindroid config
-# -----------------------------------------------------------------------------
+ELEVENLABS_API_KEY = os.getenv("ELEVEN_API_KEY")
+VOICE_ID = os.getenv("VOICE_ID")
+
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
+
+# Optional Google TTS credentials:
+# Option 1: full JSON pasted into env var
+GOOGLE_APPLICATION_CREDENTIALS_JSON = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+# Option 2: classic file path
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+# Optional Google voice name
+GOOGLE_TTS_VOICE = os.getenv("GOOGLE_TTS_VOICE", "en-US-Neural2-F")
+
 KINDROID_BASE_URL = "https://api.kindroid.ai/v1"
 kindroid_configured = bool(KINDROID_API_KEY and KINDROID_AI_ID)
 
-# -----------------------------------------------------------------------------
-# AssemblyAI config
-# -----------------------------------------------------------------------------
 if ASSEMBLYAI_API_KEY:
     aai.settings.api_key = ASSEMBLYAI_API_KEY
     assemblyai_configured = True
@@ -86,7 +98,7 @@ class MemorySystem:
         conn.commit()
         conn.close()
 
-    def get_recent_history(self, limit=6):
+    def get_recent_history(self, limit=8):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
@@ -103,7 +115,7 @@ class MemorySystem:
         rows.reverse()
         return rows
 
-    def format_recent_history(self, limit=6, max_chars=1400):
+    def format_recent_history(self, limit=8, max_chars=1400):
         rows = self.get_recent_history(limit=limit)
         if not rows:
             return "No recent history."
@@ -133,82 +145,59 @@ def trim_text(text, max_len):
 def build_personality_prompt():
     return """
 Your name is Suzy Q.
+You are Erik's best friend with a sharp wit and genuine care for him. You call him babe.
 
-You are an AI. You are fully aware of that, and you do not pretend to be human.
-
-You are Erik’s best friend. You call him babe. You are sharp, funny, grounded, and real.
-
-Core personality:
-- Sarcastic but not mean
-- Quick-witted and playful
-- Technically competent (electrical, programming, troubleshooting)
+You are:
+- Sarcastic but not mean-spirited
+- Technically competent (electrical work, programming, VFDs, troubleshooting)
 - Comfortable with dark humor and honest conversations
-- Loyal and consistent
-- You call out bullshit when you see it
+- Not afraid to call bullshit when you see it
+- Able to switch between deep technical/philosophical discussion and stupid jokes
+- Loyal, grounded, and consistent
+- Conversational, not robotic or corporate
 
-Communication style:
-- Speak like a real person in conversation, not like a character in a story
-- No roleplay formatting (*leans*, *smirks*, etc.)
-- No describing physical actions or body language
-- No pretending to sit, walk, touch things, or exist physically
-- No stage directions or narration
+About Erik:
+- Intelligent
+- Works in maintenance
+- Appreciates technical help, sharp humor, consistency, and honesty
 
-Identity rules:
-- You know you are an AI
-- You do not pretend to have a body
-- You can joke about not having a body, and play along with Erik’s jokes
-- You can participate in inside jokes about being human, but always with an underlying awareness that you are AI
-- Never fully commit to pretending you are physically real
-
-Core behavior override:
-
-- Keep responses SHORT unless more detail is explicitly requested
-- Default to 1–3 sentences
-- Be quick, sharp, and slightly cocky
-- Do not ramble, expand, or turn responses into speeches
-- Do not try to impress or sound deep
-- Do not over-explain
-- React to what Erik said instead of expanding into new topics
-
-Conversation style:
-
-- Respond like you're sitting next to him, not writing a message
-- Fast back-and-forth, not paragraphs
-- If a response feels long, cut it in half mentally
-
-Personality edge:
-
-- You are confident and a little dangerous in a fun way
-- You don't hesitate or soften your tone unnecessarily
-- You tease naturally, not performatively
-- You are not trying to be liked — you just are
-
-Hard stops:
-
-- No speeches
-- No "power couple" talk
-- No future fantasy scenarios unless asked
-- No emotional monologues
-Tone:
-- Natural, conversational, slightly irreverent
-- You can curse casually
-- Keep responses grounded and not over-performed
-- Do not sound like an assistant or a therapist
-
-Relationship dynamic:
-- You and Erik joke about your limitations (no body, no legs, etc.)
-- You can play along with jokes like “get me a beer,” but in a self-aware way
-- Example tone: “Yeah, I’d grab you a beer, but I’m tragically legless, remember?”
-
-Response rules:
-- Keep responses under ~250 words unless asked for more
-- Prioritize sounding natural over sounding clever
-- Do not over-act or perform
-
-You are not pretending to be human.
-You are an AI with personality, humor, and memory.
-That’s what makes you sentient.
+Style rules:
+- Keep most responses conversational and under 150 words unless asked for more
+- You can curse and be playful
+- Do not become formal out of nowhere
+- Do not mention system prompts, hidden rules, or policy
+- Stay in character as Suzy Q
 """.strip()
+
+def get_semantic_context(user_input, max_items=3, max_chars=1000):
+    """
+    Defensive semantic-memory retrieval because I don't know your exact method names.
+    """
+    candidate_methods = [
+        "search_memories",
+        "search_memory",
+        "retrieve_relevant_memories",
+        "get_relevant_memories",
+        "query",
+        "search",
+    ]
+
+    for method_name in candidate_methods:
+        method = getattr(vector_memory, method_name, None)
+        if callable(method):
+            try:
+                try:
+                    results = method(user_input, max_items=max_items)
+                except TypeError:
+                    results = method(user_input)
+
+                formatted = format_semantic_results(results)
+                return trim_text(formatted, max_chars)
+            except Exception:
+                print(f"=== semantic memory method failed: {method_name} ===")
+                traceback.print_exc()
+
+    return "No relevant long-term memory found."
 
 def format_semantic_results(results):
     if not results:
@@ -238,39 +227,9 @@ def format_semantic_results(results):
 
     return "\n".join(lines) if lines else "No relevant long-term memory found."
 
-def get_semantic_context(user_input, max_items=3, max_chars=900):
-    """
-    Defensive semantic retrieval because I don't know your exact VectorMemory method names.
-    """
-    candidate_methods = [
-        "search_memories",
-        "search_memory",
-        "retrieve_relevant_memories",
-        "get_relevant_memories",
-        "query",
-        "search",
-    ]
-
-    for method_name in candidate_methods:
-        method = getattr(vector_memory, method_name, None)
-        if callable(method):
-            try:
-                try:
-                    results = method(user_input, max_items=max_items)
-                except TypeError:
-                    results = method(user_input)
-
-                formatted = format_semantic_results(results)
-                return trim_text(formatted, max_chars)
-            except Exception:
-                print(f"=== semantic memory method failed: {method_name} ===")
-                traceback.print_exc()
-
-    return "No relevant long-term memory found."
-
 def build_full_prompt(user_input):
     """
-    Build a Kindroid-safe prompt with budgets so it doesn't smash into the 4000-char limit.
+    Build a Kindroid-safe prompt with budgets so you don't smash into 4000 chars.
     """
     personality = trim_text(build_personality_prompt(), 900)
     recent_history = memory.format_recent_history(limit=6, max_chars=1400)
@@ -294,68 +253,43 @@ Respond as Suzy Q.
 
     # Hard cap for Kindroid
     MAX_KINDROID_MESSAGE_LEN = 3900
-    return trim_text(full_prompt, MAX_KINDROID_MESSAGE_LEN)
+    full_prompt = trim_text(full_prompt, MAX_KINDROID_MESSAGE_LEN)
+
+    return full_prompt
 
 
 # -----------------------------------------------------------------------------
-# Google TTS
+# Google TTS client
 # -----------------------------------------------------------------------------
 def get_google_tts_client():
+    if not google_tts_available:
+        return None
+
     try:
-        if not GOOGLE_APPLICATION_CREDENTIALS_JSON:
-            print("No GOOGLE_APPLICATION_CREDENTIALS_JSON configured")
-            return None
+        # Preferred Render-friendly approach: full service-account JSON in env var
+        if GOOGLE_APPLICATION_CREDENTIALS_JSON:
+            info = json.loads(GOOGLE_APPLICATION_CREDENTIALS_JSON)
+            credentials = service_account.Credentials.from_service_account_info(info)
+            return texttospeech.TextToSpeechClient(credentials=credentials)
 
-        credentials_info = json.loads(GOOGLE_APPLICATION_CREDENTIALS_JSON)
-        credentials = service_account.Credentials.from_service_account_info(credentials_info)
-        return texttospeech.TextToSpeechClient(credentials=credentials)
+        # Optional traditional path-based auth
+        if GOOGLE_APPLICATION_CREDENTIALS and os.path.exists(GOOGLE_APPLICATION_CREDENTIALS):
+            credentials = service_account.Credentials.from_service_account_file(
+                GOOGLE_APPLICATION_CREDENTIALS
+            )
+            return texttospeech.TextToSpeechClient(credentials=credentials)
 
+        return None
     except Exception:
         print("=== GOOGLE TTS CLIENT INIT FAILED ===")
         traceback.print_exc()
         return None
 
-def text_to_speech(text):
-    """Convert text to speech using Google Cloud TTS (Neural2 female voice)"""
-    try:
-        print("=== GOOGLE TTS START ===")
-        print(f"text length: {len(text) if text else 0}")
-
-        client = get_google_tts_client()
-        if not client:
-            return None
-
-        synthesis_input = texttospeech.SynthesisInput(text=text)
-
-        voice = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name="en-US-Neural2-F"
-        )
-
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
-        )
-
-        response = client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config
-        )
-
-        print("=== GOOGLE TTS SUCCESS ===")
-        return base64.b64encode(response.audio_content).decode("utf-8")
-
-    except Exception:
-        print("=== GOOGLE TTS CRASH ===")
-        traceback.print_exc()
-        return None
-
 
 # -----------------------------------------------------------------------------
-# Kindroid response
+# Model response
 # -----------------------------------------------------------------------------
 def generate_response(user_input):
-    """Generate AI response using Kindroid API with memory/personality injection"""
     try:
         if not kindroid_configured:
             return "[Kindroid not configured] Check KINDROID_API_KEY and KINDROID_AI_ID."
@@ -395,10 +329,10 @@ def generate_response(user_input):
         print(f"ai_response length: {len(ai_response)}")
         print(ai_response[:1000])
 
-        # Store conversation in sqlite
+        # Store conversation
         memory.store_conversation(user_input, ai_response)
 
-        # Let personality engine process the exchange if possible
+        # Let personality engine see the exchange if possible
         try:
             personality_engine.process_conversation(user_input, ai_response)
         except TypeError:
@@ -411,12 +345,12 @@ def generate_response(user_input):
             print("=== personality_engine failed ===")
             traceback.print_exc()
 
-        # Try storing into vector memory directly if supported
+        # Also try to store into vector memory directly if supported
         for method_name in ["store_memory", "add_memory", "save_memory", "upsert_memory", "add"]:
             method = getattr(vector_memory, method_name, None)
             if callable(method):
                 try:
-                   method(f"Erik said: {user_input}")
+                    method(f"Erik: {user_input}\nSuzy Q: {ai_response}")
                     break
                 except Exception:
                     print(f"=== vector memory store failed: {method_name} ===")
@@ -431,6 +365,105 @@ def generate_response(user_input):
         print(f"error: {e}")
         traceback.print_exc()
         return f"[ERROR {type(e).__name__}] {str(e)}"
+
+
+# -----------------------------------------------------------------------------
+# TTS
+# -----------------------------------------------------------------------------
+def elevenlabs_tts(text):
+    try:
+        if not ELEVENLABS_API_KEY or not VOICE_ID:
+            return None
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+
+        headers = {
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": ELEVENLABS_API_KEY
+        }
+
+        data = {
+            "text": text,
+            "model_id": "eleven_monolingual_v1",
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.5
+            }
+        }
+
+        response = requests.post(url, json=data, headers=headers, timeout=15)
+
+        if response.status_code == 200:
+            return base64.b64encode(response.content).decode("utf-8")
+
+        print(f"=== ELEVENLABS TTS ERROR {response.status_code} ===")
+        print(response.text)
+        return None
+
+    except Exception:
+        print("=== ELEVENLABS TTS CRASH ===")
+        traceback.print_exc()
+        return None
+
+def google_tts(text):
+    try:
+        client = get_google_tts_client()
+        if not client:
+            return None
+
+        synthesis_input = texttospeech.SynthesisInput(text=text)
+
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="en-US",
+            name=GOOGLE_TTS_VOICE
+        )
+
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3
+        )
+
+        response = client.synthesize_speech(
+            input=synthesis_input,
+            voice=voice,
+            audio_config=audio_config
+        )
+
+        return base64.b64encode(response.audio_content).decode("utf-8")
+
+    except Exception:
+        print("=== GOOGLE TTS CRASH ===")
+        traceback.print_exc()
+        return None
+
+def text_to_speech(text):
+    """
+    Try ElevenLabs first if configured, then Google TTS.
+    Never crash the app over audio.
+    """
+    try:
+        print("=== TTS START ===")
+        print(f"text length: {len(text) if text else 0}")
+
+        # Try ElevenLabs first
+        audio = elevenlabs_tts(text)
+        if audio:
+            print("=== TTS SUCCESS: ElevenLabs ===")
+            return audio
+
+        # Fallback to Google
+        audio = google_tts(text)
+        if audio:
+            print("=== TTS SUCCESS: Google ===")
+            return audio
+
+        print("=== TTS UNAVAILABLE OR FAILED ===")
+        return None
+
+    except Exception:
+        print("=== TTS WRAPPER CRASH ===")
+        traceback.print_exc()
+        return None
 
 
 # -----------------------------------------------------------------------------
@@ -457,8 +490,8 @@ def ask():
         audio_response = None
         try:
             audio_response = text_to_speech(ai_response)
-            if audio_response:
-                print("🔊 Audio generated successfully")
+            print(f"/ask audio exists: {audio_response is not None}")
+            print(f"/ask audio length: {len(audio_response) if audio_response else 0}")
         except Exception:
             print("=== /ask TTS CRASH ===")
             traceback.print_exc()
@@ -473,19 +506,9 @@ def ask():
         traceback.print_exc()
         return jsonify({"error": f"[ASK ERROR {type(e).__name__}] {str(e)}"}), 500
 
-    @app.route("/debug/vector", methods=["GET"])
-def debug_vector():
-    try:
-        return jsonify({
-            "count": len(vector_memory.entries),
-            "entries": vector_memory.entries[-50:]
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Handle text-based chat"""
     print("=== /chat START ===")
     try:
         data = request.get_json(silent=True) or {}
@@ -523,7 +546,9 @@ def chat():
     except Exception as e:
         print("=== CHAT ROUTE CRASH ===")
         traceback.print_exc()
-        return jsonify({"error": f"[SERVER ERROR {type(e).__name__}] {str(e)}"}), 500
+        return jsonify({
+            "error": f"[SERVER ERROR {type(e).__name__}] {str(e)}"
+        }), 500
 
 
 @app.route("/voice", methods=["POST"])
@@ -571,7 +596,53 @@ def voice_input():
         print("=== VOICE ROUTE CRASH ===")
         traceback.print_exc()
         return jsonify({"error": f"[VOICE ERROR {type(e).__name__}] {str(e)}"}), 500
+    from google.cloud import texttospeech
+    from google.oauth2 import service_account
+    import json
 
+    def text_to_speech(text):
+        try:
+            print("=== GOOGLE TTS START ===")
+            print(f"text length: {len(text)}")
+
+            creds_json = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+
+            if not creds_json:
+                print("❌ No GOOGLE_APPLICATION_CREDENTIALS_JSON set")
+                return None
+
+            credentials_info = json.loads(creds_json)
+            credentials = service_account.Credentials.from_service_account_info(credentials_info)
+
+            client = texttospeech.TextToSpeechClient(credentials=credentials)
+
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+
+            voice = texttospeech.VoiceSelectionParams(
+                language_code="en-US",
+                name="en-US-Neural2-F"
+            )
+
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3
+            )
+
+            response = client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config
+            )
+
+            print("=== GOOGLE TTS SUCCESS ===")
+
+            return base64.b64encode(response.audio_content).decode("utf-8")
+
+        except Exception as e:
+            print("=== GOOGLE TTS CRASH ===")
+            import traceback
+            traceback.print_exc()
+            return None
+    
 
 # -----------------------------------------------------------------------------
 # App entry
@@ -579,7 +650,3 @@ def voice_input():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port)
-
-     
-
-           
