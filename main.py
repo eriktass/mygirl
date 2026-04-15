@@ -303,81 +303,13 @@ def get_google_tts_client():
 # Model response
 # -----------------------------------------------------------------------------
 def generate_response(user_input):
-    try:
-        if not kindroid_configured:
-            return "[Kindroid not configured] Check KINDROID_API_KEY and KINDROID_AI_ID."
+    full_prompt = build_full_prompt(user_input)
 
-        full_prompt = build_full_prompt(user_input)
+    print("=== PROMPT DEBUG ===")
+    print(f"prompt length: {len(full_prompt)}")
+    print(full_prompt[:1200])
 
-        print("=== KINDROID PROMPT DEBUG ===")
-        print(f"user_input length: {len(user_input)}")
-        print(f"full_prompt length: {len(full_prompt)}")
-        print(full_prompt[:1200])
-
-        headers = {
-            "Authorization": f"Bearer {KINDROID_API_KEY}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "message": full_prompt,
-            "ai_id": KINDROID_AI_ID,
-        }
-
-        response = requests.post(
-            f"{KINDROID_BASE_URL}/send-message",
-            headers=headers,
-            json=payload,
-            timeout=30,
-        )
-
-        if response.status_code != 200:
-            error_msg = f"[Kindroid API error {response.status_code}] {response.text}"
-            print(error_msg)
-            return error_msg
-
-        ai_response = response.text.strip()
-
-        print("=== KINDROID RESPONSE DEBUG ===")
-        print(f"ai_response length: {len(ai_response)}")
-        print(ai_response[:1000])
-
-        # Store conversation
-        memory.store_conversation(user_input, ai_response)
-
-        # Let personality engine see the exchange if possible
-        try:
-            personality_engine.process_conversation(user_input, ai_response)
-        except TypeError:
-            try:
-                personality_engine.process_conversation(
-                    f"Erik: {user_input}\nSuzy Q: {ai_response}"
-                )
-            except Exception:
-                print("=== personality_engine fallback failed ===")
-                traceback.print_exc()
-        except Exception:
-            print("=== personality_engine failed ===")
-            traceback.print_exc()
-
-        # Also try to store into vector memory directly if supported
-        for method_name in [
-            "store_memory",
-            "add_memory",
-            "save_memory",
-            "upsert_memory",
-            "add",
-        ]:
-            method = getattr(vector_memory, method_name, None)
-            if callable(method):
-                try:
-                    method(f"Erik: {user_input}")
-                    break
-                except Exception:
-                    print(f"=== vector memory store failed: {method_name} ===")
-                    traceback.print_exc()
-
-        return ai_response
+    return "[TEST MODE] prompt built successfully"
 
     except Exception as e:
         print("=== GENERATE_RESPONSE CRASH ===")
