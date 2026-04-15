@@ -311,15 +311,7 @@ def generate_response(user_input):
 
     return "[TEST MODE] prompt built successfully"
 
-    except Exception as e:
-        print("=== GENERATE_RESPONSE CRASH ===")
-        print(f"user_input: {user_input}")
-        print(f"error type: {type(e).__name__}")
-        print(f"error: {e}")
-        traceback.print_exc()
-        return f"[ERROR {type(e).__name__}] {str(e)}"
-
-
+   
 # -----------------------------------------------------------------------------
 # TTS
 # -----------------------------------------------------------------------------
