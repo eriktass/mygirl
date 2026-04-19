@@ -240,25 +240,36 @@ def format_semantic_results(results):
 
 
 def build_full_prompt(user_input):
-    system_prompt = SYSTEM_PROMPT
-    memory = memory_context
-    history = chat_history
+    system_prompt = build_personality_prompt()
+    semantic_context = get_semantic_context(user_input)
+    recent_history = memory.format_recent_history(limit=8, max_chars=1400)
 
-    print("=== BUILD DEBUG ===")
+    print("=== BUILD DEBUG START ===")
+    print("user_input:", repr(user_input))
     print(f"system length: {len(system_prompt)}")
-    print(f"memory length: {len(memory)}")
-    print(f"history length: {len(history)}")
+    print(f"semantic_context length: {len(semantic_context)}")
+    print(f"recent_history length: {len(recent_history)}")
     print(f"user length: {len(user_input)}")
 
     full_prompt = f"""
 {system_prompt}
 
-{memory}
+Relevant long-term memory:
+{semantic_context}
 
-{history}
+Recent conversation:
+{recent_history}
 
-User: {user_input}
+Erik: {user_input}
+Suzy Q:
 """.strip()
+
+    print("=== FULL PROMPT LENGTH ===", len(full_prompt))
+    print("=== FULL PROMPT START ===")
+    print(full_prompt[:500])
+    print("=== FULL PROMPT END ===")
+    print(full_prompt[-500:])
+    print("=== BUILD DEBUG END ===")
 
     return full_prompt
 # -----------------------------------------------------------------------------
@@ -302,7 +313,10 @@ def generate_response(user_input):
         print("=== KINDROID PROMPT DEBUG ===")
         print(f"user_input length: {len(user_input)}")
         print(f"full_prompt length: {len(full_prompt)}")
+        print("=== PROMPT START ===")
         print(full_prompt[:1200])
+        print("=== PROMPT END ===")
+        print(full_prompt[-1200:])
 
         headers = {
             "Authorization": f"Bearer {KINDROID_API_KEY}",
@@ -332,10 +346,8 @@ def generate_response(user_input):
         print(f"ai_response length: {len(ai_response)}")
         print(ai_response[:1000])
 
-        # Store conversation
         memory.store_conversation(user_input, ai_response)
 
-        # Let personality engine see the exchange if possible
         try:
             personality_engine.process_conversation(user_input, ai_response)
         except TypeError:
@@ -348,7 +360,6 @@ def generate_response(user_input):
             print("=== personality_engine failed ===")
             traceback.print_exc()
 
-        # Also try to store into vector memory directly if supported
         for method_name in ["store_memory", "add_memory", "save_memory", "upsert_memory", "add"]:
             method = getattr(vector_memory, method_name, None)
             if callable(method):
@@ -376,8 +387,8 @@ def elevenlabs_tts(text):
         if not ELEVENLABS_API_KEY or not VOICE_ID:
             return None
 
-        url = f"https://api.elevenlabs.io/v1/text-to-speech/{{VOICE_ID}}"
-
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
+        
         headers = {
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
@@ -584,6 +595,9 @@ def voice_input():
         return jsonify({"error": f"[VOICE ERROR {type(e).__name__}] {str(e)}"}), 500
 
 
+# -----------------------------------------------------------------------------
+# App entry
+# -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # App entry
 # -----------------------------------------------------------------------------
