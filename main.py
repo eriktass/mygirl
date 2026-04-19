@@ -309,15 +309,15 @@ def generate_response(user_input):
     print(f"prompt length: {len(full_prompt)}")
     print(full_prompt[:1200])
 
-    return "[TEST MODE] prompt built successfully"
-
-   if TEST_MODE:
+    if TEST_MODE:
     print("[TEST MODE] prompt built successfully")
     print(prompt)
 
     if FIRE_TEST_MODE:
-        response = call_model(prompt)
-        print(response)
+    response = call_model(prompt)
+    print(response)
+    return "[TEST MODE] prompt built successfully" 
+
 # -----------------------------------------------------------------------------
 # TTS
 # -----------------------------------------------------------------------------
