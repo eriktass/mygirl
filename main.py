@@ -240,37 +240,28 @@ def format_semantic_results(results):
 
 
 def build_full_prompt(user_input):
-    """Build a Kindroid-safe prompt with budgets so you don't smash into 4000 chars."""
+    system_part = get_system_prompt()
+    memory_part = get_memory_context(user_input)
+    history_part = get_recent_history()
+    user_part = user_input
 
-    personality = trim_text(build_personality_prompt(), 900)
-    recent_history = memory.format_recent_history(limit=6, max_chars=1400)
-    semantic_context = get_semantic_context(user_input, max_items=3, max_chars=900)
-    user_text = trim_text(user_input, 500)
+    print("=== BUILD DEBUG ===")
+    print(f"system length: {len(system_part)}")
+    print(f"memory length: {len(memory_part)}")
+    print(f"history length: {len(history_part)}")
+    print(f"user length: {len(user_part)}")
 
-    full_prompt = (
-        f"""
-{personality}
+    full_prompt = f"""
+{system_part}
 
-Recent conversation history:
-{recent_history}
+{memory_part}
 
-Relevant long-term memory:
-{semantic_context}
+{history_part}
 
-Current message from Erik:
-{user_text}
-
-Respond as Suzy Q.
+User: {user_part}
 """.strip()
-    )
-
-    # Hard cap for Kindroid
-    MAX_KINDROID_MESSAGE_LEN = 3900
-    full_prompt = trim_text(full_prompt, MAX_KINDROID_MESSAGE_LEN)
 
     return full_prompt
-
-
 # -----------------------------------------------------------------------------
 # Google TTS client
 # -----------------------------------------------------------------------------
