@@ -444,22 +444,25 @@ def google_tts(text):
 
 def text_to_speech(text):
     """Try ElevenLabs first if configured, then Google TTS. Never crash the app over audio."""
-
     try:
         print("=== TTS START ===")
         print(f"text length: {len(text) if text else 0}")
+        print(f"ELEVENLABS configured: {bool(ELEVENLABS_API_KEY and VOICE_ID)}")
+        print(f"GOOGLE TTS available: {google_tts_available}")
+        print(f"GOOGLE creds json present: {bool(GOOGLE_APPLICATION_CREDENTIALS_JSON)}")
+        print(f"GOOGLE creds path present: {bool(GOOGLE_APPLICATION_CREDENTIALS)}")
 
-        # Try ElevenLabs first
         audio = elevenlabs_tts(text)
         if audio:
             print("=== TTS SUCCESS: ElevenLabs ===")
             return audio
+        print("=== ElevenLabs returned None ===")
 
-        # Fallback to Google
         audio = google_tts(text)
         if audio:
             print("=== TTS SUCCESS: Google ===")
             return audio
+        print("=== Google TTS returned None ===")
 
         print("=== TTS UNAVAILABLE OR FAILED ===")
         return None
