@@ -240,25 +240,24 @@ def format_semantic_results(results):
 
 
 def build_full_prompt(user_input):
-    system_part = get_system_prompt()
-    memory_part = get_memory_context(user_input)
-    history_part = get_recent_history()
-    user_part = user_input
+    system_prompt = SYSTEM_PROMPT
+    memory = memory_context
+    history = chat_history
 
     print("=== BUILD DEBUG ===")
-    print(f"system length: {len(system_part)}")
-    print(f"memory length: {len(memory_part)}")
-    print(f"history length: {len(history_part)}")
-    print(f"user length: {len(user_part)}")
+    print(f"system length: {len(system_prompt)}")
+    print(f"memory length: {len(memory)}")
+    print(f"history length: {len(history)}")
+    print(f"user length: {len(user_input)}")
 
     full_prompt = f"""
-{system_part}
+{system_prompt}
 
-{memory_part}
+{memory}
 
-{history_part}
+{history}
 
-User: {user_part}
+User: {user_input}
 """.strip()
 
     return full_prompt
